@@ -1,0 +1,99 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import { listPublicNotices } from '../../lib/sovfhub';
+
+const page = Math.max(1, parseInt(Astro.url.searchParams.get('page') ?? '1', 10) || 1);
+
+let notices: Awaited<ReturnType<typeof listPublicNotices>>['notices'] = [];
+let error: string | null = null;
+try {
+  const result = await listPublicNotices(page);
+  notices = result.notices;
+} catch {
+  error = 'Could not load Public Notices right now.';
+}
+
+function excerpt(text: string, length = 180): string {
+  const clean = text.trim();
+  return clean.length > length ? clean.slice(0, length).trimEnd() + '…' : clean;
+}
+---
+<Layout title="Public Notices">
+  <section class="card">
+    <h1>Public Notices</h1>
+    <p>Notices posted by Companions of the Sovfren Society.</p>
+
+    {error && <p role="alert">{error}</p>}
+
+    {!error && notices.length === 0 && <p>No notices have been posted yet.</p>}
+
+    <ul class="notice-list">
+      {notices.map((notice) => (
+        <li>
+          <a class="notice-title" href={`/public-notices/${notice.id}`}>{notice.title}</a>
+          <p class="notice-meta">
+            {notice.authorName}
+            {notice.authorCompanionNumber && <> &middot; {notice.authorCompanionNumber}</>}
+            &middot; {new Date(notice.createdAt).toLocaleDateString()}
+          </p>
+          <p class="notice-excerpt">{excerpt(notice.content)}</p>
+        </li>
+      ))}
+    </ul>
+
+    <div class="pagination">
+      {page > 1 && <a href={`/public-notices?page=${page - 1}`}>&larr; Newer</a>}
+      {notices.length === 20 && <a href={`/public-notices?page=${page + 1}`}>Older &rarr;</a>}
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .notice-list {
+    list-style: none;
+    margin: 24px 0 0;
+    padding: 0;
+  }
+
+  .notice-list li {
+    padding: 16px 0;
+    border-top: 1px solid var(--sf-border);
+  }
+
+  .notice-list li:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .notice-title {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--sf-primary);
+    margin-bottom: 4px;
+  }
+
+  .notice-meta {
+    margin: 0 0 6px;
+    font-size: 0.8rem;
+    color: var(--sf-text-muted);
+  }
+
+  .notice-excerpt {
+    margin: 0;
+    color: var(--sf-text);
+  }
+
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 24px;
+  }
+
+  .pagination a {
+    color: var(--sf-primary);
+    font-weight: 600;
+  }
+</style>

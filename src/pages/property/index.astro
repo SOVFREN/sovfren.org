@@ -1,0 +1,35 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { searchProperty, type PropertyRecord } from '../../lib/sovfhub';
+
+const q = Astro.url.searchParams.get('q')?.trim();
+let results: PropertyRecord[] = [];
+let error: string | null = null;
+
+if (q) {
+  try {
+    results = await searchProperty(q);
+  } catch {
+    error = 'Search failed. Try again shortly.';
+  }
+}
+---
+<Layout title="Property Register">
+  <h1>Property Register</h1>
+  <form method="get">
+    <label for="q">Search</label>
+    <input id="q" name="q" value={q ?? ''} placeholder="Property description or owner Companion Number" />
+    <button type="submit">Search</button>
+  </form>
+
+  {error && <p role="alert">{error}</p>}
+
+  <ul>
+    {results.map((item) => (
+      <li>
+        <a href={`/property/${encodeURIComponent(item.id)}`}>{item.description}</a>
+        {' '}— {item.status}
+      </li>
+    ))}
+  </ul>
+</Layout>

@@ -1,0 +1,20 @@
+---
+export const prerender = false;
+
+import { generateState, generatePkce, buildAuthorizeUrl } from '../../lib/sso';
+
+const state = generateState();
+const { verifier, challenge } = await generatePkce();
+
+// Secure cookies are silently dropped by browsers over plain HTTP (the
+// current test deployment, 185.44.254.68:4000) — only mark them Secure
+// once actually served over HTTPS, or they'd never be stored at all.
+const secure = Astro.url.protocol === 'https:';
+
+// Short-lived, used only to survive the round trip to sso.sovfhub.com and
+// back to /portal/callback — not a session cookie.
+Astro.cookies.set('sso_state', state, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 300 });
+Astro.cookies.set('sso_verifier', verifier, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 300 });
+
+return Astro.redirect(buildAuthorizeUrl(state, challenge));
+---

@@ -1,0 +1,55 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import { exchangeCodeForTokens } from '../../lib/sso';
+import { setSession } from '../../lib/session';
+
+const url = Astro.url;
+const ssoError = url.searchParams.get('error');
+const code = url.searchParams.get('code');
+const returnedState = url.searchParams.get('state');
+
+const expectedState = Astro.cookies.get('sso_state')?.value;
+const verifier = Astro.cookies.get('sso_verifier')?.value;
+Astro.cookies.delete('sso_state', { path: '/' });
+Astro.cookies.delete('sso_verifier', { path: '/' });
+
+let error: string | null = null;
+
+if (ssoError) {
+  error = `Sign-in was cancelled or failed (${ssoError}).`;
+} else if (!code || !returnedState || !expectedState || !verifier || returnedState !== expectedState) {
+  error = 'Sign-in request could not be verified. Please try again.';
+} else {
+  try {
+    const tokens = await exchangeCodeForTokens(code, verifier);
+    setSession(Astro, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt: Date.now() + tokens.expires_in * 1000,
+    });
+    return Astro.redirect('/portal');
+  } catch {
+    error = 'Could not complete sign-in with SovfHub. Please try again.';
+  }
+}
+---
+<Layout title="Sign in">
+  <section class="card">
+    <h1>Sign-in failed</h1>
+    <p>{error}</p>
+    <a class="btn" href="/portal/login">Try again</a>
+  </section>
+</Layout>
+
+<style>
+  .btn {
+    display: inline-block;
+    background: var(--sf-primary);
+    color: #ffffff;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: var(--sf-radius-full);
+  }
+</style>

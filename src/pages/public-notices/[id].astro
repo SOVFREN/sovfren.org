@@ -1,0 +1,63 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import { getPublicNotice } from '../../lib/sovfhub';
+
+const { id } = Astro.params;
+const noticeId = parseInt(id ?? '', 10);
+
+let notice = null;
+let error: string | null = null;
+
+if (!Number.isFinite(noticeId)) {
+  error = 'Notice not found.';
+} else {
+  try {
+    const result = await getPublicNotice(noticeId);
+    notice = result.notice;
+  } catch {
+    error = 'Notice not found.';
+  }
+}
+---
+<Layout title={notice ? notice.title : 'Public Notice'}>
+  <section class="card">
+    {error && <p role="alert">{error}</p>}
+
+    {notice && (
+      <>
+        <h1>{notice.title}</h1>
+        <p class="notice-meta">
+          Posted by {notice.authorName}
+          {notice.authorCompanionNumber && <> &middot; {notice.authorCompanionNumber}</>}
+          &middot; {new Date(notice.createdAt).toLocaleDateString()}
+        </p>
+        <div class="notice-content">
+          {notice.content.split('\n').map((paragraph) => paragraph.trim() && <p>{paragraph}</p>)}
+        </div>
+      </>
+    )}
+
+    <a class="back-link" href="/public-notices">&larr; All Public Notices</a>
+  </section>
+</Layout>
+
+<style>
+  .notice-meta {
+    margin: 0 0 24px;
+    font-size: 0.85rem;
+    color: var(--sf-text-muted);
+  }
+
+  .notice-content p {
+    margin: 0 0 16px;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-top: 16px;
+    color: var(--sf-primary);
+    font-weight: 600;
+  }
+</style>

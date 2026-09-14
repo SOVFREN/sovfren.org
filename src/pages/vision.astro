@@ -1,0 +1,57 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const values = ['Peace', 'Love', 'Honour', 'Good Conscience'];
+---
+<Layout title="Our Vision">
+  <section class="card">
+    <h1>Our Vision</h1>
+    <p class="lead">
+      Our vision is a world in which humanity flourishes through Peace, Love and Honour;
+      where Men and Women live with dignity, act with Good Conscience, care for one another
+      and steward the natural world responsibly.
+    </p>
+    <p class="lead">
+      The Sovfren Society seeks to bring people together through fellowship, education,
+      humanitarian service, innovation and responsible enterprise&mdash;supporting
+      life-changing initiatives that relieve hardship, create opportunity and advance
+      human wellbeing.
+    </p>
+    <p class="lead">
+      We envision a Society where knowledge and resources are used not merely for
+      accumulation, but to create abundance, prosperity and opportunity for its Companions
+      and the wider human family, leaving a stronger and more peaceful inheritance for
+      generations to come.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Our Values</h2>
+    <div class="values">
+      {values.map((value) => (
+        <span class="value-pill">{value}</span>
+      ))}
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .lead:last-child {
+    margin-bottom: 0;
+  }
+
+  .values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .value-pill {
+    padding: 12px 22px;
+    border-radius: var(--sf-radius-full);
+    background: var(--sf-primary-soft);
+    color: var(--sf-primary-strong);
+    font-weight: 600;
+    font-size: 1rem;
+  }
+</style>

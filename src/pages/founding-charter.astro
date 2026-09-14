@@ -1,0 +1,161 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const principles = [
+  ['Peace', 'seeking peaceful relations and peaceful resolution of differences.'],
+  ['Love', 'showing compassion, kindness, fellowship and care towards others.'],
+  ['Honour', 'acting truthfully, faithfully and with integrity.'],
+  ['Good Conscience', 'endeavouring to do what is fair, responsible and morally right.'],
+  ['Human Dignity', 'recognising the inherent worth of every Man and Woman.'],
+  ['Compassion', 'recognising suffering and seeking wherever reasonably possible to relieve it.'],
+  ['Humanitarian Service', 'using knowledge, resources and fellowship to improve human wellbeing and assist those in need.'],
+  ['Stewardship', 'responsibly caring for life, knowledge, property, resources and the natural world entrusted to our care.'],
+  ['Fellowship', 'bringing Men and Women together through cooperation, friendship and shared purpose.'],
+  ['Wisdom', 'encouraging learning, reflection, knowledge and the responsible application of what we learn.'],
+  ['Prosperity and Abundance', 'creating opportunities for Companions and communities to flourish through cooperation, education, enterprise and responsible Stewardship.'],
+  ['Personal Responsibility', 'encouraging every Companion to take responsibility for their own actions, choices and contribution to the wider fellowship.'],
+];
+
+const objects = [
+  'Encourage peace, cooperation and mutual respect amongst Men and Women.',
+  'Advance education, wisdom and lifelong learning.',
+  'Preserve and develop knowledge.',
+  'Encourage scientific discovery, innovation and technological advancement.',
+  'Support responsible enterprise and honest commerce.',
+  'Inspire and undertake life-changing initiatives that improve society.',
+  'Protect and responsibly administer the Common Estate.',
+  'Create opportunities for lawful abundance and prosperity for its Companions.',
+  'Encourage service, generosity and responsible stewardship.',
+  'Leave a stronger inheritance for future generations.',
+  'To advance humanitarian, benevolent and life-changing initiatives that relieve hardship, strengthen human wellbeing, encourage fellowship and contribute towards the peaceful advancement of humanity.',
+];
+
+const institutions = [
+  'The Foundation Trust',
+  'The Treasury',
+  'Sovfhub',
+  'Educational Institutions',
+  'Commercial Institutions',
+  'Research Institutions',
+  'Charitable Institutions',
+  'Other Institutions established by Constitutional Instrument.',
+];
+
+const instrumentMatters = [
+  'Constitutional Offices',
+  'Governance',
+  'Membership',
+  'Stewardship',
+  'Treasury',
+  'Registers',
+  'Digital Institutions',
+  'Education',
+  'Commerce',
+  'Other constitutional matters',
+];
+---
+<Layout title="Founding Charter">
+  <section class="card">
+    <h1>Charter of the Sovfren Society</h1>
+    <p class="kicker">Founding Charter</p>
+    <p class="motto">Peace &bull; Love &bull; Honour</p>
+
+    <p>The Sovfren Society is constituted as a private voluntary Society established by the free association of its Companions.</p>
+    <p>The Society is founded upon the enduring principles of Natural Law, recognising that peace, justice, good conscience and responsible stewardship are fundamental to the flourishing of humanity.</p>
+    <p>The Society is not created by statute, is not a statutory body, and does not derive its constitutional authority from legislation. Its constitutional authority arises from this Charter and the voluntary Covenant entered into by its Companions.</p>
+    <p>The Society exists to promote the advancement of humanity through education, fellowship, innovation, responsible stewardship, enterprise and peaceful cooperation amongst Men and Women.</p>
+    <p>It seeks to inspire, support and undertake initiatives that improve lives, strengthen communities, preserve knowledge, encourage personal responsibility and contribute to a more peaceful, prosperous and equitable world.</p>
+    <p>The Society is not established for the sole purpose of generating profit. Rather, it exists to steward its resources wisely in pursuit of its constitutional Objects, creating opportunities for lawful abundance, prosperity and wellbeing for its Companions while advancing the betterment of humanity.</p>
+    <p>Through faithful Stewardship, cooperation and service, the Society seeks to leave a lasting inheritance of peace, wisdom and opportunity for present and future generations.</p>
+
+    <h2>Article I &mdash; Name</h2>
+    <p>The name of this Society shall be:</p>
+    <p class="emphasis">The Sovfren Society</p>
+
+    <h2>Article II &mdash; Nature</h2>
+    <p>The Sovfren Society is a private voluntary Society constituted by the free association of its Companions.</p>
+    <p>The Society governs its internal affairs through this Charter and the Constitutional Instruments adopted under it.</p>
+    <p>Membership and participation are voluntary.</p>
+    <p>The Society exists independently of political parties and is established for peaceful, educational, cultural, charitable, scientific, technological and mutual benefit purposes consistent with this Charter.</p>
+
+    <h2>Article III &mdash; Constitutional Authority</h2>
+    <p>This Charter is the supreme governing instrument of the Sovfren Society.</p>
+    <p>Every Constitutional Instrument, Office, Charter, Resolution and Register derives its authority from this Charter.</p>
+    <p>Where uncertainty arises, this Charter shall prevail.</p>
+
+    <h2>Article IV &mdash; Constitutional Foundation</h2>
+    <p>The Society is founded upon Natural Law and recognises the spiritual and moral value inherent in humanity, life and creation.</p>
+    <p>The Founding Principles of the Society are:</p>
+    <ul class="principles">
+      {principles.map(([term, description]) => (
+        <li><strong>{term}</strong> &mdash; {description}</li>
+      ))}
+    </ul>
+
+    <h3>Spiritual and Religious Character</h3>
+    <p>The Society recognises a spiritual and religious dimension to its fellowship founded upon reverence for life and creation, Natural Law, Good Conscience and the shared pursuit of Peace, Love and Honour. The Society welcomes Men and Women of different faiths, beliefs and philosophical traditions who can peacefully share in its purposes. No Companion is required to abandon or adopt a particular religious creed as a condition of fellowship.</p>
+
+    <h2>Article V &mdash; Objects</h2>
+    <p>The Objects of the Society are to:</p>
+    <ul>
+      {objects.map((item) => <li>{item}</li>)}
+    </ul>
+
+    <h2>Article VI &mdash; Constitutional Institutions</h2>
+    <p>The Society may establish Constitutional Institutions to carry out its Objects.</p>
+    <p>These may include:</p>
+    <ul>
+      {institutions.map((item) => <li>{item}</li>)}
+    </ul>
+
+    <h2>Article VII &mdash; Companions</h2>
+    <p>The Society consists of Companions who voluntarily accept the Covenant of Membership.</p>
+    <p>Companions contribute to the Society through fellowship, stewardship and participation in its constitutional life.</p>
+    <p>The rights and responsibilities of Companions shall be defined within the Constitutional Instruments.</p>
+
+    <h2>Article VIII &mdash; Stewardship</h2>
+    <p>Every office, institution, asset and resource entrusted to the Society shall be administered responsibly for the fulfilment of the Society's constitutional Objects.</p>
+    <p>The Society recognises that prosperity is best achieved through responsible Stewardship rather than mere accumulation.</p>
+
+    <h2>Article IX &mdash; Constitutional Instruments</h2>
+    <p>The Society may adopt Constitutional Instruments to regulate:</p>
+    <ul>
+      {instrumentMatters.map((item) => <li>{item}</li>)}
+    </ul>
+    <p>Every Constitutional Instrument shall remain subordinate to this Charter.</p>
+
+    <h2>Article X &mdash; Amendments</h2>
+    <p>This Charter may only be amended by the constitutional procedure established by the Society.</p>
+    <p>Any amendment shall preserve the private, voluntary nature of the Society and remain consistent with its constitutional foundation and Objects.</p>
+
+    <h2>Article XI &mdash; Dissolution</h2>
+    <p>Should the Society ever cease to exist, its Common Estate shall be administered in accordance with the Constitutional Instruments in a manner that best preserves the Society's legacy, honours its obligations and furthers its constitutional Objects, unless otherwise lawfully determined by the Society.</p>
+  </section>
+</Layout>
+
+<style>
+  .kicker {
+    margin: 0 0 4px;
+    font-weight: 600;
+    color: var(--sf-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.85rem;
+  }
+
+  .motto {
+    margin: 0 0 28px;
+    font-weight: 600;
+    color: var(--sf-primary);
+  }
+
+  .emphasis {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--sf-text);
+  }
+
+  .principles li {
+    max-width: 760px;
+  }
+</style>

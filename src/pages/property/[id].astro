@@ -1,0 +1,32 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import { getPropertyRecord } from '../../lib/sovfhub';
+
+const { id } = Astro.params;
+let record = null;
+let error: string | null = null;
+
+try {
+  record = await getPropertyRecord(id!);
+} catch {
+  error = 'No property record found for this ID.';
+}
+---
+<Layout title={`Property · ${id}`}>
+  <h1>Property Record</h1>
+  {error && <p role="alert">{error}</p>}
+  {record && (
+    <dl>
+      <dt>Description</dt>
+      <dd>{record.description}</dd>
+      <dt>Registered Owner (Companion Number)</dt>
+      <dd>{record.ownerCompanionNumber}</dd>
+      <dt>Registered Date</dt>
+      <dd>{record.registeredDate}</dd>
+      <dt>Status</dt>
+      <dd>{record.status}</dd>
+    </dl>
+  )}
+</Layout>

@@ -1,0 +1,17 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const companionNumber = Astro.url.searchParams.get('companion_number')?.trim();
+if (companionNumber) {
+  return Astro.redirect(`/register/${encodeURIComponent(companionNumber)}`);
+}
+---
+<Layout title="Register">
+  <h1>Register of Companions</h1>
+  <p>Look up a companion's Proof of Life record by Companion Number.</p>
+  <form action="/register" method="get">
+    <label for="companion_number">Companion Number</label>
+    <input id="companion_number" name="companion_number" placeholder="SovfCom00000001" required />
+    <button type="submit">Look up</button>
+  </form>
+</Layout>

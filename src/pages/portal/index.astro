@@ -1,0 +1,276 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../layouts/Layout.astro';
+import { fetchUserInfo } from '../../lib/sso';
+import { getSession, clearSession } from '../../lib/session';
+
+const session = await getSession(Astro);
+if (!session) {
+  return Astro.redirect('/portal/login');
+}
+
+let profile;
+try {
+  profile = await fetchUserInfo(session.accessToken);
+} catch {
+  clearSession(Astro);
+  return Astro.redirect('/portal/login');
+}
+
+const registerUrl = profile.companion_number
+  ? new URL(`/register/${profile.companion_number}`, Astro.url.origin).href
+  : null;
+const qrCodeDataUrl = registerUrl
+  ? await QRCode.toDataURL(registerUrl, { width: 200, margin: 1 })
+  : null;
+---
+<Layout title="Companion Portal">
+  <section class="wrap">
+    <h1>Welcome, {profile.name ?? profile.preferred_username}</h1>
+
+    <div class="id-card">
+      <div class="id-header">
+        <img src="/images/logo-small.png" alt="" class="id-crest" />
+        <div class="id-header-text">
+          <span class="id-org">Sovfren Society</span>
+          <span class="id-doc-type">Companion Identification</span>
+        </div>
+        <span class="id-status">VALID</span>
+      </div>
+
+      <div class="id-body">
+        <div class="id-photo">
+          {profile.picture ? (
+            <img src={profile.picture} alt="" />
+          ) : (
+            <div class="id-photo-placeholder">No Photo</div>
+          )}
+        </div>
+
+        <dl class="id-details">
+          <dt>Name</dt>
+          <dd>{profile.name ?? profile.preferred_username}</dd>
+
+          <dt>Companion Number</dt>
+          <dd>{profile.companion_number ?? '—'}</dd>
+
+          {profile.email && (
+            <>
+              <dt>Email</dt>
+              <dd>{profile.email}</dd>
+            </>
+          )}
+        </dl>
+
+        {qrCodeDataUrl && (
+          <div class="id-qr">
+            <img src={qrCodeDataUrl} alt="Scan to view public Register record" />
+          </div>
+        )}
+      </div>
+
+      <div class="id-footer">Verify this identity at sovfren.org/register</div>
+    </div>
+
+    <div class="actions">
+      {profile.companion_number && (
+        <a class="btn" href={`/register/${profile.companion_number}`}>View my Register record</a>
+      )}
+      <a class="btn btn-outline" href="/portal/notices">My Public Notices</a>
+
+      <form method="post" action="/portal/logout" class="logout-form">
+        <button type="submit" class="link-btn">Sign out</button>
+      </form>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .wrap {
+    padding: 32px 0;
+  }
+
+  .wrap h1 {
+    font-size: 1.5rem;
+    color: var(--sf-text);
+    margin: 0 0 24px;
+  }
+
+  .id-card {
+    max-width: 480px;
+    background: var(--sf-surface);
+    border-radius: var(--sf-radius-xl);
+    box-shadow: var(--sf-shadow);
+    overflow: hidden;
+    border: 1px solid var(--sf-border);
+  }
+
+  .id-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-primary-strong) 100%);
+    color: #ffffff;
+  }
+
+  .id-crest {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 50%;
+    padding: 2px;
+  }
+
+  .id-header-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .id-org {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .id-doc-type {
+    font-size: 0.75rem;
+    opacity: 0.85;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .id-status {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 12px;
+    border-radius: var(--sf-radius-full);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .id-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .id-photo {
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+    border-radius: var(--sf-radius-md);
+    overflow: hidden;
+    border: 1px solid var(--sf-border);
+    background: var(--sf-bg);
+  }
+
+  .id-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .id-photo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--sf-text-muted);
+    text-align: center;
+    padding: 4px;
+  }
+
+  .id-details {
+    flex: 1;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .id-details dt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sf-text-muted);
+    margin: 0 0 2px;
+  }
+
+  .id-details dd {
+    margin: 0 0 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--sf-text);
+    overflow-wrap: anywhere;
+  }
+
+  .id-qr {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+  }
+
+  .id-qr img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .id-footer {
+    padding: 10px 20px;
+    background: var(--sf-bg);
+    border-top: 1px solid var(--sf-border);
+    font-size: 0.7rem;
+    color: var(--sf-text-muted);
+    text-align: center;
+  }
+
+  .actions {
+    margin-top: 24px;
+  }
+
+  .btn {
+    display: inline-block;
+    background: var(--sf-primary);
+    color: #ffffff;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: var(--sf-radius-full);
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--sf-primary);
+    border: 1px solid var(--sf-primary);
+  }
+
+  .logout-form {
+    margin-top: 16px;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--sf-text-muted);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  @media (max-width: 480px) {
+    .id-body {
+      flex-wrap: wrap;
+    }
+    .id-qr {
+      margin-left: auto;
+    }
+  }
+</style>

@@ -1,0 +1,119 @@
+---
+export const prerender = false;
+
+import Layout from '../../../layouts/Layout.astro';
+import { getSession, clearSession } from '../../../lib/session';
+import { getMyNotices } from '../../../lib/sovfhub';
+
+const session = await getSession(Astro);
+if (!session) {
+  return Astro.redirect('/portal/login');
+}
+
+let notices;
+try {
+  const result = await getMyNotices(session.accessToken);
+  notices = result.notices;
+} catch {
+  clearSession(Astro);
+  return Astro.redirect('/portal/login');
+}
+---
+<Layout title="My Public Notices">
+  <section class="card">
+    <h1>My Public Notices</h1>
+
+    <a class="btn" href="/portal/notices/new">Post a New Notice</a>
+
+    {notices.length === 0 && <p>You haven't posted any notices yet.</p>}
+
+    <ul class="notice-list">
+      {notices.map((notice) => (
+        <li>
+          <div>
+            <span class="notice-title">{notice.title}</span>
+            {notice.status === 'draft' && <span class="badge">Draft</span>}
+            <p class="notice-meta">{new Date(notice.updatedAt).toLocaleDateString()}</p>
+          </div>
+          <div class="notice-actions">
+            {notice.status === 'published' && <a href={`/public-notices/${notice.id}`}>View</a>}
+            <a href={`/portal/notices/${notice.id}/edit`}>Edit</a>
+          </div>
+        </li>
+      ))}
+    </ul>
+
+    <a class="back-link" href="/portal">&larr; Back to Portal</a>
+  </section>
+</Layout>
+
+<style>
+  .btn {
+    display: inline-block;
+    background: var(--sf-primary);
+    color: #ffffff;
+    font-weight: 600;
+    padding: 10px 20px;
+    border-radius: var(--sf-radius-full);
+    margin: 8px 0 24px;
+  }
+
+  .notice-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .notice-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 0;
+    border-top: 1px solid var(--sf-border);
+    flex-wrap: wrap;
+  }
+
+  .notice-list li:first-child {
+    border-top: none;
+  }
+
+  .notice-title {
+    font-weight: 600;
+    color: var(--sf-text);
+  }
+
+  .badge {
+    margin-left: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: var(--sf-primary-soft);
+    color: var(--sf-primary-strong);
+    padding: 2px 8px;
+    border-radius: var(--sf-radius-full);
+  }
+
+  .notice-meta {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+    color: var(--sf-text-muted);
+  }
+
+  .notice-actions {
+    display: flex;
+    gap: 12px;
+    font-weight: 600;
+  }
+
+  .notice-actions a {
+    color: var(--sf-primary);
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-top: 24px;
+    color: var(--sf-text-muted);
+    text-decoration: underline;
+  }
+</style>

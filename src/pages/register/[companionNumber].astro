@@ -1,0 +1,366 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../layouts/Layout.astro';
+import {
+  getRegisterRecord,
+  requestRegisterPin,
+  unlockRegisterRecord,
+  type RegisterRecord,
+} from '../../lib/sovfhub';
+
+const { companionNumber } = Astro.params;
+let record: RegisterRecord | null = null;
+let pinSent = false;
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('action');
+  try {
+    if (action === 'request-pin') {
+      const result = await requestRegisterPin(companionNumber!);
+      pinSent = result.sent;
+      record = await getRegisterRecord(companionNumber!);
+    } else if (action === 'unlock') {
+      record = await unlockRegisterRecord(companionNumber!, String(form.get('pin') ?? ''));
+    }
+  } catch {
+    error = 'Could not verify this record. Check the Companion Number and PIN and try again.';
+  }
+}
+
+if (!record && !error) {
+  try {
+    record = await getRegisterRecord(companionNumber!);
+  } catch {
+    error = 'No record found for this Companion Number.';
+  }
+}
+
+// The QR encodes a direct link to this page, so scanning it verifies the
+// companion the same way visiting this URL does.
+const qrCodeDataUrl = await QRCode.toDataURL(Astro.url.href, { width: 200, margin: 1 });
+
+const statusLabel = record?.status.toUpperCase() ?? '';
+---
+<Layout title={`Proof of Life · ${companionNumber}`}>
+  <section class="wrap">
+    {error && (
+      <div class="notice notice-error">{error}</div>
+    )}
+
+    {record && (
+      <>
+        <div class="id-card">
+          <div class="id-header">
+            <img src="/images/logo-small.png" alt="" class="id-crest" />
+            <div class="id-header-text">
+              <span class="id-org">Sovfren Society</span>
+              <span class="id-doc-type">Proof of Life</span>
+            </div>
+            <span class={`id-status status-${record.status}`}>{statusLabel}</span>
+          </div>
+
+          <div class="id-body">
+            <div class="id-photo">
+              <div class="id-photo-placeholder">No Photo</div>
+            </div>
+
+            <dl class="id-details">
+              <dt>First Name</dt>
+              <dd>{record.fullRecordUnlocked ? record.firstName : '•••••'}</dd>
+
+              <dt>Family Name</dt>
+              <dd>{record.fullRecordUnlocked ? record.familyName : '•••••'}</dd>
+
+              <dt>Credentials</dt>
+              <dd>{record.fullRecordUnlocked ? (record.credentials ?? '—') : '•••••'}</dd>
+
+              <dt>Companion Number</dt>
+              <dd>{record.companionNumber}</dd>
+
+              <dt>Expiry Date</dt>
+              <dd>{record.fullRecordUnlocked ? (record.expiryDate ?? '—') : '•••••'}</dd>
+            </dl>
+
+            <div class="id-qr">
+              <img src={qrCodeDataUrl} alt={`QR code for ${record.companionNumber}`} />
+            </div>
+          </div>
+
+          <div class="id-footer">
+            This {record.membershipSubject} is a Companion of Sovfren Society.
+          </div>
+        </div>
+
+        {!record.fullRecordUnlocked && (
+          <div class="access-panel">
+            <h2>Protected Record Access</h2>
+            <p>Request a one-time 6 digit PIN from the companion to view full details.</p>
+
+            <form method="post" class="pin-request-form">
+              <input type="hidden" name="action" value="request-pin" />
+              <button type="submit" class="btn btn-outline">Request Access PIN</button>
+            </form>
+
+            {pinSent && <p class="notice notice-info">A PIN was sent to the companion's registered address.</p>}
+
+            <form method="post" class="pin-unlock-form">
+              <input type="hidden" name="action" value="unlock" />
+              <label for="pin">Enter PIN</label>
+              <div class="pin-row">
+                <input id="pin" name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required />
+                <button type="submit" class="btn">Unlock Full Record</button>
+              </div>
+            </form>
+          </div>
+        )}
+      </>
+    )}
+  </section>
+</Layout>
+
+<style>
+  .wrap {
+    padding: 32px 0;
+  }
+
+  .notice {
+    padding: 14px 18px;
+    border-radius: var(--sf-radius-md);
+    font-size: 0.95rem;
+    margin-bottom: 20px;
+  }
+
+  .notice-error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+  }
+
+  .notice-info {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    margin: 12px 0 0;
+  }
+
+  .id-card {
+    max-width: 520px;
+    background: var(--sf-surface);
+    border-radius: var(--sf-radius-xl);
+    box-shadow: var(--sf-shadow);
+    overflow: hidden;
+    border: 1px solid var(--sf-border);
+  }
+
+  .id-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-primary-strong) 100%);
+    color: #ffffff;
+  }
+
+  .id-crest {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 50%;
+    padding: 2px;
+  }
+
+  .id-header-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .id-org {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .id-doc-type {
+    font-size: 0.75rem;
+    opacity: 0.85;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .id-status {
+    padding: 4px 12px;
+    border-radius: var(--sf-radius-full);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .id-status.status-valid {
+    background: #16a34a;
+  }
+
+  .id-status.status-expired {
+    background: #d97706;
+  }
+
+  .id-status.status-revoked {
+    background: #dc2626;
+  }
+
+  .id-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .id-photo {
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+    border-radius: var(--sf-radius-md);
+    overflow: hidden;
+    border: 1px solid var(--sf-border);
+    background: var(--sf-bg);
+  }
+
+  .id-photo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--sf-text-muted);
+    text-align: center;
+    padding: 4px;
+  }
+
+  .id-details {
+    flex: 1 1 200px;
+    margin: 0;
+    min-width: 0;
+  }
+
+  .id-details dt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sf-text-muted);
+    margin: 0 0 2px;
+  }
+
+  .id-details dd {
+    margin: 0 0 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--sf-text);
+    overflow-wrap: anywhere;
+  }
+
+  .id-qr {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+  }
+
+  .id-qr img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .id-footer {
+    padding: 12px 20px;
+    background: var(--sf-bg);
+    border-top: 1px solid var(--sf-border);
+    font-size: 0.85rem;
+    color: var(--sf-text);
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .access-panel {
+    max-width: 520px;
+    margin-top: 24px;
+    background: var(--sf-surface);
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    padding: 24px;
+  }
+
+  .access-panel h2 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+    color: var(--sf-text);
+  }
+
+  .access-panel p {
+    margin: 0 0 16px;
+    color: var(--sf-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .pin-request-form {
+    margin-bottom: 8px;
+  }
+
+  .pin-unlock-form {
+    margin-top: 16px;
+  }
+
+  .pin-unlock-form label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sf-text);
+    margin-bottom: 6px;
+  }
+
+  .pin-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pin-row input {
+    flex: 1 1 140px;
+    height: var(--sf-input-height, 44px);
+    padding: 0 14px;
+    border-radius: var(--sf-radius-lg);
+    border: 1px solid var(--sf-border);
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+  }
+
+  .btn {
+    display: inline-block;
+    background: var(--sf-primary);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--sf-radius-full);
+    cursor: pointer;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--sf-primary);
+    border: 1px solid var(--sf-primary);
+  }
+
+  @media (max-width: 480px) {
+    .id-qr {
+      margin-left: auto;
+    }
+  }
+</style>

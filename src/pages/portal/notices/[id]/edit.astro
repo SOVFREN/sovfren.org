@@ -1,0 +1,164 @@
+---
+export const prerender = false;
+
+import Layout from '../../../../layouts/Layout.astro';
+import { getSession, clearSession } from '../../../../lib/session';
+import { getMyNotices, updateNotice, deleteNotice } from '../../../../lib/sovfhub';
+
+const session = await getSession(Astro);
+if (!session) {
+  return Astro.redirect('/portal/login');
+}
+
+const noticeId = parseInt(Astro.params.id ?? '', 10);
+const justCreated = Astro.url.searchParams.get('created') === '1';
+
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('action');
+
+  try {
+    if (action === 'delete') {
+      await deleteNotice(session.accessToken, noticeId);
+      return Astro.redirect('/portal/notices');
+    }
+
+    const title = String(form.get('title') ?? '').trim();
+    const content = String(form.get('content') ?? '').trim();
+    const status = form.get('status') === 'draft' ? 'draft' : 'published';
+
+    if (!title || !content) {
+      error = 'Title and content are required.';
+    } else {
+      await updateNotice(session.accessToken, noticeId, title, content, status);
+      return Astro.redirect('/portal/notices?updated=1');
+    }
+  } catch {
+    error = 'Could not save this notice. Please try again.';
+  }
+}
+
+let notice;
+try {
+  const result = await getMyNotices(session.accessToken);
+  notice = result.notices.find((n) => n.id === noticeId) ?? null;
+} catch {
+  clearSession(Astro);
+  return Astro.redirect('/portal/login');
+}
+
+if (!notice) {
+  return Astro.redirect('/portal/notices');
+}
+---
+<Layout title={`Edit · ${notice.title}`}>
+  <section class="card">
+    <h1>Edit Notice</h1>
+
+    {justCreated && <p class="notice-info">Notice posted.</p>}
+    {error && <p role="alert">{error}</p>}
+
+    <form method="post" class="notice-form">
+      <label for="title">Title</label>
+      <input id="title" name="title" required value={notice.title} />
+
+      <label for="content">Content</label>
+      <textarea id="content" name="content" rows="10" required>{notice.content}</textarea>
+
+      <div class="form-actions">
+        <button type="submit" name="status" value="published" class="btn">
+          {notice.status === 'draft' ? 'Publish' : 'Save Changes'}
+        </button>
+        <button type="submit" name="status" value="draft" class="btn btn-outline">Save as Draft</button>
+      </div>
+    </form>
+
+    <form method="post" class="delete-form">
+      <input type="hidden" name="action" value="delete" />
+      <button type="submit" class="link-btn">Delete this notice</button>
+    </form>
+
+    <a class="back-link" href="/portal/notices">&larr; My Public Notices</a>
+  </section>
+</Layout>
+
+<style>
+  .notice-info {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    padding: 12px 16px;
+    border-radius: var(--sf-radius-md);
+  }
+
+  .notice-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 640px;
+  }
+
+  .notice-form label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 12px;
+  }
+
+  .notice-form input,
+  .notice-form textarea {
+    padding: 12px 14px;
+    border-radius: var(--sf-radius-lg);
+    border: 1px solid var(--sf-border);
+    font: inherit;
+    font-size: 1rem;
+    resize: vertical;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-block;
+    background: var(--sf-primary);
+    color: #ffffff;
+    font-weight: 600;
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--sf-radius-full);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--sf-primary);
+    border: 1px solid var(--sf-primary);
+  }
+
+  .delete-form {
+    margin-top: 20px;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: #b91c1c;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-top: 24px;
+    color: var(--sf-text-muted);
+    text-decoration: underline;
+  }
+</style>
