@@ -13,10 +13,24 @@ export interface Session {
 
 const COOKIE_NAME = 'sovfren_session';
 
+/**
+ * True if this request reached us over HTTPS — either directly, or via a
+ * reverse proxy that terminates TLS and forwards X-Forwarded-Proto.
+ * @astrojs/node's standalone server doesn't trust that header itself, so
+ * Astro.url.protocol alone is always "http:" behind nginx even when the
+ * public-facing connection is HTTPS — checking it in isolation would mean
+ * Secure cookies never get set once this is deployed behind the reverse
+ * proxy (sovfren.org's production setup), same failure mode as the
+ * plain-HTTP-test-server bug this check originally existed to avoid.
+ */
+export function isSecureRequest(Astro: AstroGlobal): boolean {
+  return Astro.url.protocol === 'https:' || Astro.request.headers.get('x-forwarded-proto') === 'https';
+}
+
 export function setSession(Astro: AstroGlobal, session: Session): void {
   Astro.cookies.set(COOKIE_NAME, JSON.stringify(session), {
     httpOnly: true,
-    secure: Astro.url.protocol === 'https:',
+    secure: isSecureRequest(Astro),
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 30,
