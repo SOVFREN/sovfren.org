@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import Layout from '../../layouts/Layout.astro';
 import { fetchUserInfo } from '../../lib/sso';
 import { getSession, clearSession } from '../../lib/session';
+import { getRegisterRecord, uploadRegisterPhoto, type RegisterRecord } from '../../lib/sovfhub';
 
 const session = await getSession(Astro);
 if (!session) {
@@ -17,6 +18,29 @@ try {
 } catch {
   clearSession(Astro);
   return Astro.redirect('/portal/login');
+}
+
+let photoError: string | null = null;
+
+if (Astro.request.method === 'POST' && profile.companion_number) {
+  const form = await Astro.request.formData();
+  const file = form.get('photo');
+  if (file instanceof File && file.size > 0) {
+    try {
+      await uploadRegisterPhoto(session.accessToken, file);
+    } catch {
+      photoError = 'Could not upload that photo. Please try a JPG, PNG or WEBP under 8MB.';
+    }
+  }
+}
+
+let registerRecord: RegisterRecord | null = null;
+if (profile.companion_number) {
+  try {
+    registerRecord = await getRegisterRecord(profile.companion_number);
+  } catch {
+    // Register API unreachable — the portal still works, just without the ID photo.
+  }
 }
 
 const registerUrl = profile.companion_number
@@ -42,8 +66,8 @@ const qrCodeDataUrl = registerUrl
 
       <div class="id-body">
         <div class="id-photo">
-          {profile.picture ? (
-            <img src={profile.picture} alt="" />
+          {registerRecord?.photoUrl ? (
+            <img src={registerRecord.photoUrl} alt="" />
           ) : (
             <div class="id-photo-placeholder">No Photo</div>
           )}
@@ -73,6 +97,18 @@ const qrCodeDataUrl = registerUrl
 
       <div class="id-footer">Verify this identity at sovfren.org/register</div>
     </div>
+
+    {profile.companion_number && (
+      <div class="photo-upload">
+        <h2>{registerRecord?.photoUrl ? 'Change my ID Photo' : 'Add my ID Photo'}</h2>
+        <p>Used on your Register/Proof of Life record and this Companion ID. JPG, PNG or WEBP, up to 8MB.</p>
+        {photoError && <p role="alert">{photoError}</p>}
+        <form method="post" enctype="multipart/form-data" class="photo-upload-form">
+          <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required />
+          <button type="submit" class="btn">Upload Photo</button>
+        </form>
+      </div>
+    )}
 
     <div class="actions">
       {profile.companion_number && (
@@ -230,6 +266,39 @@ const qrCodeDataUrl = registerUrl
     text-align: center;
   }
 
+  .photo-upload {
+    max-width: 480px;
+    margin-top: 24px;
+    padding: 20px;
+    background: var(--sf-surface);
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+  }
+
+  .photo-upload h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    color: var(--sf-text);
+  }
+
+  .photo-upload p {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    color: var(--sf-text-muted);
+  }
+
+  .photo-upload-form {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .photo-upload-form input[type='file'] {
+    flex: 1 1 200px;
+    font-size: 0.85rem;
+  }
+
   .actions {
     margin-top: 24px;
   }
@@ -240,9 +309,12 @@ const qrCodeDataUrl = registerUrl
     color: #ffffff;
     font-weight: 600;
     padding: 12px 24px;
+    border: none;
     border-radius: var(--sf-radius-full);
     margin-right: 8px;
     margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
   }
 
   .btn-outline {

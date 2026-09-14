@@ -65,7 +65,11 @@ const statusLabel = record?.status.toUpperCase() ?? '';
 
           <div class="id-body">
             <div class="id-photo">
-              <div class="id-photo-placeholder">No Photo</div>
+              {record.photoUrl ? (
+                <img src={record.photoUrl} alt="" />
+              ) : (
+                <div class="id-photo-placeholder">No Photo</div>
+              )}
             </div>
 
             <dl class="id-details">
@@ -230,6 +234,12 @@ const statusLabel = record?.status.toUpperCase() ?? '';
     overflow: hidden;
     border: 1px solid var(--sf-border);
     background: var(--sf-bg);
+  }
+
+  .id-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .id-photo-placeholder {

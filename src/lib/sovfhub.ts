@@ -71,6 +71,7 @@ export interface RegisterRecord {
   credentials?: string | null;
   expiryDate?: string | null;
   swornAffidavit: boolean;
+  photoUrl: string | null;
   fullRecordUnlocked: boolean;
 }
 
@@ -84,6 +85,21 @@ export function requestRegisterPin(companionNumber: string) {
 
 export function unlockRegisterRecord(companionNumber: string, pin: string) {
   return sovfhubPost<RegisterRecord>('register_unlock', { companion_number: companionNumber, pin });
+}
+
+// Multipart upload of the companion's own Register ID photo — a distinct
+// request shape from sovfhubUserPost (which is form-urlencoded), and the
+// only place this client sends a file. Content-Type (with its boundary) is
+// left for fetch to set itself from the FormData body.
+export async function uploadRegisterPhoto(accessToken: string, file: File) {
+  const body = new FormData();
+  body.append('photo', file);
+  const res = await fetch(`${API_URL}?do=register_upload_photo`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  });
+  return handle<{ photoUrl: string }>(res, 'register_upload_photo');
 }
 
 // --- Not yet built on SovfHub; contract only, calling these will throw ---
