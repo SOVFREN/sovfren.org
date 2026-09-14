@@ -4,3 +4,7 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Local-only ops notes — VPS access, DB credentials, SovfHub linkage.
+# Never commit this file.
+VPS-NOTES.md
