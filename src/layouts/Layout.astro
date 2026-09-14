@@ -64,6 +64,7 @@ const { title } = Astro.props;
       }
 
       nav {
+        position: relative;
         max-width: 1100px;
         margin: 0 auto;
         display: flex;
@@ -71,6 +72,17 @@ const { title } = Astro.props;
         justify-content: space-between;
         gap: 24px;
         padding: 14px 20px;
+      }
+
+      .menu-toggle {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: #ffffff;
+        padding: 6px;
+        cursor: pointer;
       }
 
       .brand {
@@ -109,6 +121,39 @@ const { title } = Astro.props;
       .nav-links a:hover {
         background: rgba(255, 255, 255, 0.18);
         color: #ffffff;
+      }
+
+      @media (max-width: 768px) {
+        .menu-toggle {
+          display: flex;
+        }
+
+        .nav-links {
+          display: none;
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          flex-direction: column;
+          gap: 0;
+          background: #42a5f0;
+          box-shadow: var(--sf-shadow);
+          padding: 8px 20px 16px;
+        }
+
+        .nav-links.open {
+          display: flex;
+        }
+
+        .nav-links a {
+          padding: 12px 8px;
+          border-radius: 0;
+          border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .nav-links a:hover {
+          background: rgba(255, 255, 255, 0.12);
+        }
       }
 
       main {
@@ -226,13 +271,20 @@ const { title } = Astro.props;
           <img src="/images/logo-small.png" alt="Sovfren Society" />
           Sovfren Society
         </a>
-        <div class="nav-links">
+        <div class="nav-links" id="nav-links">
           <a href="/vision">Vision</a>
           <a href="/register">Register</a>
           <a href="/property">Property</a>
           <a href="/public-notices">Public Notices</a>
           <a href="/portal">Companion Portal</a>
         </div>
+        <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="nav-links">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
       </nav>
     </header>
     <main>
@@ -249,5 +301,21 @@ const { title } = Astro.props;
         <p class="footer-copyright">&copy; Sovfren Society {new Date().getFullYear()}</p>
       </div>
     </footer>
+    <script>
+      const menuToggle = document.getElementById('menu-toggle');
+      const navLinks = document.getElementById('nav-links');
+
+      menuToggle?.addEventListener('click', () => {
+        const isOpen = navLinks?.classList.toggle('open');
+        menuToggle.setAttribute('aria-expanded', String(Boolean(isOpen)));
+      });
+
+      navLinks?.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', () => {
+          navLinks.classList.remove('open');
+          menuToggle?.setAttribute('aria-expanded', 'false');
+        });
+      });
+    </script>
   </body>
 </html>
