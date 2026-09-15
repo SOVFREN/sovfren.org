@@ -82,6 +82,12 @@ export interface SsoProfile {
   companion_number?: string;
   email?: string;
   email_verified?: boolean;
+  // Whether SovfHub has granted this account access to the Companion
+  // Portal / future internal area — see sovfren_permissions on the
+  // SovfHub side (VPS-NOTES.md §4). Absent access denies the portal;
+  // staff is a superset reserved for the future internal management area.
+  sovfren_org_access?: boolean;
+  sovfren_org_staff?: boolean;
 }
 
 export async function fetchUserInfo(accessToken: string): Promise<SsoProfile> {

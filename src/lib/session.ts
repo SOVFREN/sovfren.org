@@ -3,7 +3,7 @@
 // same logic already used by portal/index.astro and portal/callback.astro.
 
 import type { AstroGlobal } from 'astro';
-import { refreshTokens } from './sso';
+import { fetchUserInfo, refreshTokens } from './sso';
 
 export interface Session {
   accessToken: string;
@@ -46,6 +46,13 @@ export function clearSession(Astro: AstroGlobal): void {
  * it's about to expire. Returns null (and clears the cookie) if there's no
  * session, it's malformed, or the refresh fails — callers should redirect
  * to /portal/login in that case.
+ *
+ * Also rechecks Companion Portal access (sovfren_org_access, see sso.ts)
+ * on every refresh — roughly hourly, matching the access token lifetime —
+ * so a permission revoked on the SovfHub side takes effect without
+ * waiting for the full 30-day refresh-token/session lifetime to elapse.
+ * portal/callback.astro performs the same check at initial login, so a
+ * session is never created without access in the first place.
  */
 export async function getSession(Astro: AstroGlobal): Promise<Session | null> {
   const raw = Astro.cookies.get(COOKIE_NAME)?.value;
@@ -64,6 +71,11 @@ export async function getSession(Astro: AstroGlobal): Promise<Session | null> {
   if (session.expiresAt < Date.now() + 30_000) {
     try {
       const tokens = await refreshTokens(session.refreshToken);
+      const profile = await fetchUserInfo(tokens.access_token);
+      if (!profile.sovfren_org_access) {
+        clearSession(Astro);
+        return null;
+      }
       session = {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,

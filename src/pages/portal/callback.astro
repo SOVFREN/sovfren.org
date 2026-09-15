@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
-import { exchangeCodeForTokens } from '../../lib/sso';
+import { exchangeCodeForTokens, fetchUserInfo } from '../../lib/sso';
 import { setSession } from '../../lib/session';
 
 const url = Astro.url;
@@ -15,21 +15,31 @@ const verifier = Astro.cookies.get('sso_verifier')?.value;
 Astro.cookies.delete('sso_state', { path: '/' });
 Astro.cookies.delete('sso_verifier', { path: '/' });
 
+const ACCESS_DENIED_MESSAGE =
+  "Your Sovfhub account doesn't yet have access to the Companion Portal. Contact the Society if you believe this is a mistake.";
+
 let error: string | null = null;
 
-if (ssoError) {
+if (ssoError === 'access_denied') {
+  error = ACCESS_DENIED_MESSAGE;
+} else if (ssoError) {
   error = `Sign-in was cancelled or failed (${ssoError}).`;
 } else if (!code || !returnedState || !expectedState || !verifier || returnedState !== expectedState) {
   error = 'Sign-in request could not be verified. Please try again.';
 } else {
   try {
     const tokens = await exchangeCodeForTokens(code, verifier);
-    setSession(Astro, {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresAt: Date.now() + tokens.expires_in * 1000,
-    });
-    return Astro.redirect('/portal');
+    const profile = await fetchUserInfo(tokens.access_token);
+    if (!profile.sovfren_org_access) {
+      error = ACCESS_DENIED_MESSAGE;
+    } else {
+      setSession(Astro, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresAt: Date.now() + tokens.expires_in * 1000,
+      });
+      return Astro.redirect('/portal');
+    }
   } catch {
     error = 'Could not complete sign-in with SovfHub. Please try again.';
   }
