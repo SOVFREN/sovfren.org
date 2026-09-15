@@ -18,21 +18,97 @@ if (q) {
   title="Property Register"
   description="Search property held and administered under the Sovfren Society's Stewardship."
 >
-  <h1>Property Register</h1>
-  <form method="get">
-    <label for="q">Search</label>
-    <input id="q" name="q" value={q ?? ''} placeholder="Property description or owner Companion Number" />
-    <button type="submit">Search</button>
-  </form>
+  <section class="card">
+    <h1>Property Register</h1>
+    <form method="get" class="search-form">
+      <label for="q">Search</label>
+      <div class="search-row">
+        <input id="q" name="q" value={q ?? ''} placeholder="Property description or owner Companion Number" />
+        <button type="submit">Search</button>
+      </div>
+    </form>
 
-  {error && <p role="alert">{error}</p>}
+    {error && <p class="notice" role="alert">{error}</p>}
 
-  <ul>
-    {results.map((item) => (
-      <li>
-        <a href={`/property/${encodeURIComponent(item.id)}`}>{item.description}</a>
-        {' '}— {item.status}
-      </li>
-    ))}
-  </ul>
+    {q && !error && results.length === 0 && <p class="empty">No property matched that search.</p>}
+
+    {results.length > 0 && (
+      <ul class="results">
+        {results.map((item) => (
+          <li>
+            <a href={`/property/${encodeURIComponent(item.id)}`}>{item.description}</a>
+            <span class="results-status">{item.status}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
 </Layout>
+
+<style>
+  .search-form {
+    max-width: 560px;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .search-row input {
+    flex: 1 1 260px;
+  }
+
+  .search-row button {
+    margin-top: 0 !important;
+    flex-shrink: 0;
+  }
+
+  .notice {
+    padding: 14px 18px;
+    border-radius: var(--sf-radius-md);
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    font-size: 0.95rem;
+    margin: 24px 0 0;
+  }
+
+  .empty {
+    margin: 24px 0 0;
+    color: var(--sf-text-muted);
+  }
+
+  .results {
+    list-style: none;
+    margin: 28px 0 0;
+    padding: 0;
+    border-top: 1px solid var(--sf-border);
+  }
+
+  .results li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 4px;
+    border-bottom: 1px solid var(--sf-border);
+    flex-wrap: wrap;
+  }
+
+  .results a {
+    color: var(--sf-primary-strong);
+    font-weight: 600;
+  }
+
+  .results-status {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: capitalize;
+    padding: 3px 12px;
+    border-radius: var(--sf-radius-full);
+    background: var(--sf-primary-soft);
+    color: var(--sf-primary-strong);
+  }
+</style>

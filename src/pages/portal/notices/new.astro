@@ -47,7 +47,7 @@ if (Astro.request.method === 'POST') {
 
       <div class="form-actions">
         <button type="submit" name="status" value="published" class="btn">Publish</button>
-        <button type="submit" name="status" value="draft" class="btn btn-outline">Save as Draft</button>
+        <button type="submit" name="status" value="draft" class="btn btn-outline-dark">Save as Draft</button>
       </div>
     </form>
 
@@ -69,39 +69,11 @@ if (Astro.request.method === 'POST') {
     margin-top: 12px;
   }
 
-  .notice-form input,
-  .notice-form textarea {
-    padding: 12px 14px;
-    border-radius: var(--sf-radius-lg);
-    border: 1px solid var(--sf-border);
-    font: inherit;
-    font-size: 1rem;
-    resize: vertical;
-  }
-
   .form-actions {
     display: flex;
     gap: 12px;
     margin-top: 20px;
     flex-wrap: wrap;
-  }
-
-  .btn {
-    display: inline-block;
-    background: var(--sf-primary);
-    color: #ffffff;
-    font-weight: 600;
-    padding: 12px 24px;
-    border: none;
-    border-radius: var(--sf-radius-full);
-    cursor: pointer;
-    font-size: 0.95rem;
-  }
-
-  .btn-outline {
-    background: transparent;
-    color: var(--sf-primary);
-    border: 1px solid var(--sf-primary);
   }
 
   .back-link {

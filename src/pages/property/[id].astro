@@ -18,18 +18,103 @@ try {
   title={`Property · ${id}`}
   description={`Property record ${id} held under the Sovfren Society's Stewardship.`}
 >
-  <h1>Property Record</h1>
-  {error && <p role="alert">{error}</p>}
-  {record && (
-    <dl>
-      <dt>Description</dt>
-      <dd>{record.description}</dd>
-      <dt>Registered Owner (Companion Number)</dt>
-      <dd>{record.ownerCompanionNumber}</dd>
-      <dt>Registered Date</dt>
-      <dd>{record.registeredDate}</dd>
-      <dt>Status</dt>
-      <dd>{record.status}</dd>
-    </dl>
-  )}
+  <section class="card">
+    <h1>Property Record</h1>
+
+    {error && <p class="notice" role="alert">{error}</p>}
+
+    {record && (
+      <dl class="record">
+        <div class="record-row">
+          <dt>Description</dt>
+          <dd>{record.description}</dd>
+        </div>
+        <div class="record-row">
+          <dt>Registered Owner</dt>
+          <dd>{record.ownerCompanionNumber}</dd>
+        </div>
+        <div class="record-row">
+          <dt>Registered Date</dt>
+          <dd>{record.registeredDate}</dd>
+        </div>
+        <div class="record-row">
+          <dt>Status</dt>
+          <dd><span class="status-pill">{record.status}</span></dd>
+        </div>
+      </dl>
+    )}
+
+    <a class="back-link" href="/property">&larr; Back to Property Register</a>
+  </section>
 </Layout>
+
+<style>
+  .notice {
+    padding: 14px 18px;
+    border-radius: var(--sf-radius-md);
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    font-size: 0.95rem;
+    margin: 20px 0 0;
+  }
+
+  .record {
+    margin: 28px 0 0;
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    overflow: hidden;
+  }
+
+  .record-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 12px;
+    padding: 16px 22px;
+  }
+
+  .record-row:nth-child(even) {
+    background: var(--sf-bg);
+  }
+
+  .record dt {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sf-text-muted);
+  }
+
+  .record dd {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--sf-text);
+    overflow-wrap: anywhere;
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: var(--sf-radius-full);
+    background: var(--sf-primary-soft);
+    color: var(--sf-primary-strong);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-top: 24px;
+    color: var(--sf-primary-strong);
+    font-weight: 600;
+  }
+
+  @media (max-width: 560px) {
+    .record-row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+  }
+</style>
