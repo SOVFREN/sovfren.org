@@ -1,15 +1,79 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const pillars = [
+  ['Peace', 'Seeking peaceful relations and the peaceful resolution of differences.'],
+  ['Love', 'Showing compassion, kindness, fellowship and care towards others.'],
+  ['Honour', 'Acting truthfully, faithfully and with integrity.'],
+  ['Good Conscience', 'Endeavouring to do what is fair, responsible and morally right.'],
+];
+
+const offerings = [
+  {
+    title: 'Register of Companions',
+    text: "Look up a Companion's Proof of Life record by Companion Number.",
+    href: '/register',
+    cta: 'Search the Register →',
+  },
+  {
+    title: 'Property Register',
+    text: 'Search property held and administered under the Society’s Stewardship.',
+    href: '/property',
+    cta: 'Search Property →',
+  },
+  {
+    title: 'Public Notices',
+    text: 'Read notices posted by Companions of the Sovfren Society.',
+    href: '/public-notices',
+    cta: 'View Notices →',
+  },
+  {
+    title: 'Companion Portal',
+    text: 'Companions sign in to manage their notices and constitutional records.',
+    href: '/portal',
+    cta: 'Open the Portal →',
+  },
+];
 ---
-<Layout title="Home">
+<Layout
+  title="Sovfren Society — Peace is Power"
+  description="The Sovfren Society is a private voluntary Society founded on Peace, Love, Honour and Good Conscience — a vessel for Men & Women who seek knowledge, peace and prosperity."
+>
   <section class="hero">
     <div class="hero-overlay"></div>
-    <h1>Peace is Power</h1>
+    <div class="hero-content">
+      <p class="hero-kicker">The Sovfren Society</p>
+      <h1>Peace is Power</h1>
+      <p class="hero-sub">
+        A private voluntary Society for Men &amp; Women who seek knowledge, peace and
+        prosperity&mdash;united in fellowship, Stewardship and the responsible advancement
+        of humanity.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-light" href="/register">Become a Companion</a>
+        <a class="btn btn-outline" href="/founding-charter">Read the Charter</a>
+      </div>
+    </div>
   </section>
 
   <section class="card crest-card">
     <img src="/images/crest.png" alt="Sovfren Society crest" class="crest" />
-    <p class="tagline">The Sovfren Society is the vessel for Men &amp; Women who seek knowledge, peace, and prosperity</p>
+    <p class="tagline">The Sovfren Society is the vessel for Men &amp; Women who seek knowledge, peace, and prosperity.</p>
+  </section>
+
+  <section class="pillars-section">
+    <div class="section-heading">
+      <p class="kicker">Founding Principles</p>
+      <h2>What We Stand For</h2>
+    </div>
+    <div class="pillars-grid">
+      {pillars.map(([term, text]) => (
+        <div class="pillar-card">
+          <h3>{term}</h3>
+          <p>{text}</p>
+        </div>
+      ))}
+    </div>
   </section>
 
   <section id="discover" class="card discover-card">
@@ -21,6 +85,31 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <div class="discover-image">
       <img src="/images/meditate.webp" alt="" />
+    </div>
+  </section>
+
+  <section class="offerings-section">
+    <div class="section-heading">
+      <p class="kicker">Constitutional Life</p>
+      <h2>Explore the Society</h2>
+    </div>
+    <div class="offerings-grid">
+      {offerings.map((item) => (
+        <a class="offering-card" href={item.href}>
+          <h3>{item.title}</h3>
+          <p>{item.text}</p>
+          <span class="offering-cta">{item.cta}</span>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <h2>Join the Fellowship</h2>
+    <p>Take your place among Companions building peace, prosperity and a stronger inheritance for generations to come.</p>
+    <div class="cta-actions">
+      <a class="btn btn-light" href="/register">Become a Companion</a>
+      <a class="btn btn-outline-dark" href="/vision">Our Vision →</a>
     </div>
   </section>
 </Layout>
@@ -40,7 +129,7 @@ import Layout from '../layouts/Layout.astro';
     margin: 32px 0;
     border-radius: var(--sf-radius-xl);
     overflow: hidden;
-    min-height: 360px;
+    min-height: 440px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -54,14 +143,42 @@ import Layout from '../layouts/Layout.astro';
     background: linear-gradient(192deg, rgba(6, 147, 227, 0.55) 0%, rgba(20, 39, 109, 0.75) 100%);
   }
 
-  .hero h1 {
+  .hero-content {
     position: relative;
+    max-width: 640px;
+    text-align: center;
+    padding: 0 24px;
+  }
+
+  .hero-kicker {
+    margin: 0 0 8px;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .hero h1 {
     color: #ffffff;
     font-size: clamp(2rem, 5vw, 3rem);
     font-weight: 700;
     text-align: center;
-    margin: 0;
-    padding: 0 20px;
+    margin: 0 0 16px;
+  }
+
+  .hero-sub {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0 0 28px;
+  }
+
+  .hero-actions {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
   }
 
   .crest-card {
@@ -86,6 +203,61 @@ import Layout from '../layouts/Layout.astro';
     font-weight: 500;
     color: var(--sf-text);
     margin: 0;
+  }
+
+  .section-heading {
+    text-align: center;
+    max-width: 640px;
+    margin: 0 auto 32px;
+  }
+
+  .kicker {
+    margin: 0 0 6px;
+    font-weight: 600;
+    color: var(--sf-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+  }
+
+  .section-heading h2 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--sf-primary);
+  }
+
+  .pillars-section {
+    margin: 56px 0;
+  }
+
+  .pillars-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .pillar-card {
+    background: var(--sf-surface);
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    box-shadow: var(--sf-shadow-soft);
+    padding: 28px 22px;
+    text-align: center;
+  }
+
+  .pillar-card h3 {
+    margin: 0 0 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--sf-primary);
+  }
+
+  .pillar-card p {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--sf-text-muted);
   }
 
   .discover-card {
@@ -131,6 +303,84 @@ import Layout from '../layouts/Layout.astro';
     box-shadow: var(--sf-shadow);
   }
 
+  .offerings-section {
+    margin: 56px 0;
+  }
+
+  .offerings-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  .offering-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--sf-surface);
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    box-shadow: var(--sf-shadow-soft);
+    padding: 28px 24px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .offering-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--sf-shadow);
+  }
+
+  .offering-card h3 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--sf-text);
+  }
+
+  .offering-card p {
+    margin: 0 0 16px;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--sf-text-muted);
+    flex-grow: 1;
+  }
+
+  .offering-cta {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--sf-primary);
+  }
+
+  .cta-band {
+    text-align: center;
+    background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-primary-strong) 100%);
+    border-radius: var(--sf-radius-xl);
+    padding: 56px 40px;
+    margin: 56px 0 32px;
+    box-shadow: var(--sf-shadow);
+  }
+
+  .cta-band h2 {
+    margin: 0 0 12px;
+    color: #ffffff;
+    font-size: 1.75rem;
+    font-weight: 700;
+  }
+
+  .cta-band p {
+    margin: 0 0 28px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 1.05rem;
+    max-width: 560px;
+    margin-inline: auto;
+  }
+
+  .cta-actions {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
   .btn {
     display: inline-block;
     background: var(--sf-primary);
@@ -147,6 +397,46 @@ import Layout from '../layouts/Layout.astro';
     transform: translateY(-1px);
   }
 
+  .btn-light {
+    background: #ffffff;
+    color: var(--sf-primary-strong);
+  }
+
+  .btn-light:hover {
+    background: #ffffff;
+    transform: translateY(-1px);
+    opacity: 0.92;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: #ffffff;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+  }
+
+  .btn-outline:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .btn-outline-dark {
+    background: transparent;
+    color: #ffffff;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+  }
+
+  .btn-outline-dark:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
+
+  @media (max-width: 900px) {
+    .pillars-grid,
+    .offerings-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
   @media (max-width: 640px) {
     .card {
       padding: 32px 24px;
@@ -154,6 +444,13 @@ import Layout from '../layouts/Layout.astro';
     .crest-card {
       text-align: center;
       justify-content: center;
+    }
+    .pillars-grid,
+    .offerings-grid {
+      grid-template-columns: 1fr;
+    }
+    .cta-band {
+      padding: 40px 24px;
     }
   }
 </style>

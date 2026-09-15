@@ -45,7 +45,10 @@ const qrCodeDataUrl = await QRCode.toDataURL(Astro.url.href, { width: 200, margi
 
 const statusLabel = record?.status.toUpperCase() ?? '';
 ---
-<Layout title={`Proof of Life · ${companionNumber}`}>
+<Layout
+  title={`Proof of Life · ${companionNumber}`}
+  description={`Proof of Life record for Companion ${companionNumber} of the Sovfren Society.`}
+>
   <section class="wrap">
     {error && (
       <div class="notice notice-error">{error}</div>

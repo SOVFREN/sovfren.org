@@ -20,7 +20,10 @@ function excerpt(text: string, length = 180): string {
   return clean.length > length ? clean.slice(0, length).trimEnd() + '…' : clean;
 }
 ---
-<Layout title="Public Notices">
+<Layout
+  title="Public Notices"
+  description="Notices posted by Companions of the Sovfren Society."
+>
   <section class="card">
     <h1>Public Notices</h1>
     <p>Notices posted by Companions of the Sovfren Society.</p>

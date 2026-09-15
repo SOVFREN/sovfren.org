@@ -1,0 +1,21 @@
+{
+  "name": "Sovfren Society",
+  "short_name": "Sovfren",
+  "description": "The Sovfren Society is the vessel for Men & Women who seek knowledge, peace, and prosperity.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#1662d6",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

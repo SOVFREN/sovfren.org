@@ -6,7 +6,10 @@ if (companionNumber) {
   return Astro.redirect(`/register/${encodeURIComponent(companionNumber)}`);
 }
 ---
-<Layout title="Register">
+<Layout
+  title="Register"
+  description="Look up a Companion's Proof of Life record in the Sovfren Society Register by Companion Number."
+>
   <h1>Register of Companions</h1>
   <p>Look up a companion's Proof of Life record by Companion Number.</p>
   <form action="/register" method="get">

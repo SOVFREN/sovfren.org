@@ -50,7 +50,7 @@ const qrCodeDataUrl = registerUrl
   ? await QRCode.toDataURL(registerUrl, { width: 200, margin: 1 })
   : null;
 ---
-<Layout title="Companion Portal">
+<Layout title="Companion Portal" noindex>
   <section class="wrap">
     <h1>Welcome, {profile.name ?? profile.preferred_username}</h1>
 

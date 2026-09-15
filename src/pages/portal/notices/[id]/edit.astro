@@ -53,7 +53,7 @@ if (!notice) {
   return Astro.redirect('/portal/notices');
 }
 ---
-<Layout title={`Edit · ${notice.title}`}>
+<Layout title={`Edit · ${notice.title}`} noindex>
   <section class="card">
     <h1>Edit Notice</h1>
 

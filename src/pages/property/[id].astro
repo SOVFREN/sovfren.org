@@ -14,7 +14,10 @@ try {
   error = 'No property record found for this ID.';
 }
 ---
-<Layout title={`Property · ${id}`}>
+<Layout
+  title={`Property · ${id}`}
+  description={`Property record ${id} held under the Sovfren Society's Stewardship.`}
+>
   <h1>Property Record</h1>
   {error && <p role="alert">{error}</p>}
   {record && (

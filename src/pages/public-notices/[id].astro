@@ -21,7 +21,10 @@ if (!Number.isFinite(noticeId)) {
   }
 }
 ---
-<Layout title={notice ? notice.title : 'Public Notice'}>
+<Layout
+  title={notice ? notice.title : 'Public Notice'}
+  description={notice ? notice.content.slice(0, 160).trim() : 'A public notice posted by a Companion of the Sovfren Society.'}
+>
   <section class="card">
     {error && <p role="alert">{error}</p>}
 
