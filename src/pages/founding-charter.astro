@@ -33,13 +33,13 @@ const objects = [
 const institutions = [
   'The Foundation Trust',
   'The Treasury',
-  'Sovfhub',
   'Educational Institutions',
   'Commercial Institutions',
   'Research Institutions',
   'Charitable Institutions',
   'Other Institutions established by Constitutional Instrument.',
 ];
+const institutionsSplit = 2;
 
 const instrumentMatters = [
   'Constitutional Offices',
@@ -108,7 +108,9 @@ const instrumentMatters = [
     <p>The Society may establish Constitutional Institutions to carry out its Objects.</p>
     <p>These may include:</p>
     <ul>
-      {institutions.map((item) => <li>{item}</li>)}
+      {institutions.slice(0, institutionsSplit).map((item) => <li>{item}</li>)}
+      <li><a href="/sovfhub">Sovfhub</a></li>
+      {institutions.slice(institutionsSplit).map((item) => <li>{item}</li>)}
     </ul>
 
     <h2>Article VII &mdash; Companions</h2>
