@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly SSO_TOKEN_URL: string;
   readonly SSO_USERINFO_URL: string;
   readonly SSO_REDIRECT_URI: string;
+  readonly ADMIN_COMPANION_NUMBERS?: string;
 }
 
 interface ImportMeta {

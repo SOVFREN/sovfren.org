@@ -1,0 +1,383 @@
+---
+import { code128B } from '../lib/barcode';
+
+interface Props {
+  name: string;
+  companionNumber?: string | null;
+  status?: 'valid' | 'expired' | 'revoked';
+  title?: string | null;
+  expiryDate?: string | null;
+  photoUrl?: string | null;
+  qrCodeDataUrl?: string | null;
+}
+
+const {
+  name,
+  companionNumber,
+  status = 'valid',
+  title,
+  expiryDate,
+  photoUrl,
+  qrCodeDataUrl,
+} = Astro.props;
+
+const barcode = companionNumber ? code128B(companionNumber) : null;
+---
+<div class="flip" data-flip>
+  <div class="flip-inner">
+    <!-- FRONT -->
+    <div class="face front">
+      <header class="top">
+        <img src="/images/logo-small.png" alt="" class="crest" />
+        <div class="top-text">
+          <span class="doc-title">CERTIFICATE OF THE IDENTITY</span>
+          <span class="doc-sub">Issued by The Sovfren Society</span>
+          <span class="doc-class">COMPANION</span>
+        </div>
+      </header>
+
+      <div class="panel">
+        <dl class="fields">
+          <div><dt>Name:</dt><dd>{name}</dd></div>
+          {title && <div><dt>Title:</dt><dd>{title}</dd></div>}
+          <div><dt>Status:</dt><dd class={`st-${status}`}>{status.toUpperCase()}</dd></div>
+          {expiryDate && <div><dt>Expires:</dt><dd>{expiryDate}</dd></div>}
+          <div><dt>SOV</dt><dd>-{companionNumber ?? '—'}</dd></div>
+        </dl>
+
+        <div class="photo">
+          {photoUrl ? <img src={photoUrl} alt="" /> : <span>No Photo</span>}
+        </div>
+      </div>
+
+      <div class="lower">
+        <div class="qr">
+          {qrCodeDataUrl && <img src={qrCodeDataUrl} alt="Scan to view public Register record" />}
+        </div>
+
+        <div class="sig-block">
+          <div class="signature">{name}</div>
+          {barcode && (
+            <svg
+              class="barcode"
+              viewBox={`0 0 ${barcode.width} 40`}
+              preserveAspectRatio="none"
+              aria-label={`Barcode for ${companionNumber}`}
+            >
+              {barcode.bars.map((b) => <rect x={b.x} y="0" width={b.width} height="40" />)}
+            </svg>
+          )}
+        </div>
+
+        <div class="seal">
+          <img src="/images/crest.png" alt="" />
+        </div>
+      </div>
+
+      <footer class="foot">This Certificate of the identity is registered with The Sovfren Society</footer>
+    </div>
+
+    <!-- BACK -->
+    <div class="face back">
+      <h3 class="back-title">Sovfren Society · Companion Declaration</h3>
+      <p class="declaration">
+        This card identifies the named Companion of the Sovfren Society. The holder declares
+        themselves a free and living person, acting in their own name and on their own
+        responsibility. All rights are reserved without prejudice. The authenticity of this
+        card and the standing of its holder may be checked at any time by scanning the QR code on
+        the front or by visiting sovfren.org/register and entering the Companion Number.
+      </p>
+      <div class="back-marks">
+        <img src="/images/crest.png" alt="" class="back-crest" />
+        <div class="back-contact">
+          <strong>The Sovfren Society</strong>
+          <span>sovfren.org/register</span>
+          {companionNumber && <span>{companionNumber}</span>}
+        </div>
+      </div>
+    </div>
+  </div>
+  <button type="button" class="flip-btn" data-flip-btn>Flip card</button>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-flip]').forEach((el) => {
+    const toggle = () => el.classList.toggle('flipped');
+    el.querySelector('.flip-inner')?.addEventListener('click', toggle);
+    el.querySelector('[data-flip-btn]')?.addEventListener('click', toggle);
+  });
+</script>
+
+<style>
+  .flip {
+    max-width: 560px;
+    perspective: 1400px;
+    container-type: inline-size;
+  }
+
+  .flip-inner {
+    position: relative;
+    aspect-ratio: 1016 / 638;
+    transform-style: preserve-3d;
+    transition: transform 0.7s var(--sf-ease);
+    cursor: pointer;
+  }
+
+  .flip.flipped .flip-inner {
+    transform: rotateY(180deg);
+  }
+
+  .face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 3.5cqw;
+    overflow: hidden;
+    background: linear-gradient(180deg, #4aa3e0 0%, #2d8fd6 100%);
+    color: #fff;
+    box-shadow: var(--sf-shadow);
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  /* ---------- front ---------- */
+  .front {
+    display: grid;
+    grid-template-rows: 25% 38% 31% 6%;
+    padding: 0 3.8%;
+  }
+
+  .top {
+    display: flex;
+    align-items: flex-start;
+    gap: 3%;
+    padding-top: 4.5%;
+  }
+
+  .crest {
+    width: 24%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 1cqw;
+    padding: 1.2cqw;
+  }
+
+  .top-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: 1;
+    text-align: right;
+  }
+
+  .doc-title {
+    font-size: 5.6cqw;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .doc-sub {
+    font-size: 2.1cqw;
+    margin-top: 1cqw;
+    opacity: 0.95;
+  }
+
+  .doc-class {
+    font-size: 4.4cqw;
+    line-height: 1.1;
+    margin-top: 1cqw;
+    letter-spacing: 0.02em;
+  }
+
+  .panel {
+    display: grid;
+    grid-template-columns: 1fr 32%;
+    background: #fff;
+    color: #111;
+    margin: 0 -3.8cqw;
+    padding: 0 3.8cqw;
+  }
+
+  .fields {
+    margin: 0;
+    padding-top: 1.6cqw;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .fields div {
+    display: flex;
+    gap: 0.8cqw;
+    font-size: 3.6cqw;
+    line-height: 1.22;
+  }
+
+  .fields dt {
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .fields dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .st-valid { color: #12803a; }
+  .st-expired { color: #b45309; }
+  .st-revoked { color: #b91c1c; }
+
+  .photo {
+    margin: 0 -3.8cqw 0 0;
+    background: #e8eef5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #5f728c;
+    font-size: 2.2cqw;
+    overflow: hidden;
+  }
+
+  .photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .lower {
+    display: grid;
+    grid-template-columns: 19% 1fr 21%;
+    gap: 2cqw;
+    background: #fff;
+    margin: 0 -3.8cqw;
+    padding: 1cqw 3.8cqw 1.5cqw;
+    color: #111;
+  }
+
+  .qr img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .sig-block {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: #fff;
+  }
+
+  .signature {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding-left: 2cqw;
+    font-family: 'Segoe Script', 'Brush Script MT', cursive;
+    font-size: 4.6cqw;
+    color: #1d3fa0;
+    white-space: nowrap;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+  }
+
+  .barcode {
+    width: 100%;
+    height: 38%;
+    margin-top: 1.5cqw;
+    fill: #111;
+  }
+
+  .seal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .seal img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .foot {
+    align-self: center;
+    text-align: center;
+    font-size: 2.1cqw;
+    white-space: nowrap;
+  }
+
+  /* ---------- back ---------- */
+  .back {
+    transform: rotateY(180deg);
+    padding: 4.5% 4%;
+    display: flex;
+    flex-direction: column;
+    gap: 3cqw;
+  }
+
+  .back-title {
+    margin: 0;
+    text-align: center;
+    font-weight: 400;
+    font-size: 4.2cqw;
+  }
+
+  .declaration {
+    margin: 0;
+    background: #fff;
+    color: #111;
+    padding: 2.4cqw 2.6cqw;
+    font-size: 2.9cqw;
+    line-height: 1.4;
+    margin-left: -4cqw;
+    margin-right: -4cqw;
+    padding-left: 4cqw;
+    padding-right: 4cqw;
+  }
+
+  .back-marks {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4cqw;
+    min-height: 0;
+  }
+
+  .back-crest {
+    height: 100%;
+    max-height: 26cqw;
+    aspect-ratio: 1;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 2cqw;
+    padding: 1.5cqw;
+  }
+
+  .back-contact {
+    display: flex;
+    flex-direction: column;
+    font-size: 3.2cqw;
+    gap: 0.6cqw;
+  }
+
+  .flip-btn {
+    margin-top: 12px;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--sf-text-muted);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flip-inner { transition: none; }
+  }
+</style>
