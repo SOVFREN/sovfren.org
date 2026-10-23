@@ -132,7 +132,7 @@ const barcode = barcodeText ? code128B(barcodeText) : null;
           {heraldryUrl && <img class="px arms" src={heraldryUrl} alt="Private estate heraldry" />}
           <img class="px ems" src="/images/prototype/ems.png" alt="" />
           <img class="px stripes" src="/images/prototype/ems-stripes.png" alt="" />
-          <div class="px care">Aux soins du Consul d'<br />{sendingState}</div>
+          <div class="px care">Aux soins du Consul d' <span class="surname">{sendingState}</span></div>
           <div class="mark">PROTOTYPE — NOT VALID</div>
         </>
       ) : (
@@ -232,7 +232,8 @@ const barcode = barcodeText ? code128B(barcodeText) : null;
   .arms { object-fit: contain; left: 21%; top: 61.5%; width: 24%; height: 33%; }
   .ems { left: 47%; top: 74%; width: 30%; height: 12.7%; object-fit: contain; }
   .stripes { left: 77.5%; top: 75%; width: 18.5%; height: 6.5%; object-fit: contain; }
-  .care { left: 77.5%; top: 83%; font-size: 1.9cqw; line-height: 1.15; }
+  .care { left: 77.5%; top: 83%; width: 19%; font-size: 1.9cqw; line-height: 1.15; }
+  .surname { text-transform: uppercase; }
   .crest-back { left: 3.74%; top: 70.2%; width: 15.45%; height: 24.6%; object-fit: contain; background: #fff; padding: 1cqw; box-sizing: border-box; }
   .crest-back + .care { left: 22%; top: 76%; font-size: 3cqw; line-height: 1.3; }
 
