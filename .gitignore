@@ -8,3 +8,6 @@ dist/
 # Local-only ops notes — VPS access, DB credentials, SovfHub linkage.
 # Never commit this file.
 VPS-NOTES.md
+
+# Companion thumbprint/autograph images (biometric data)
+data/

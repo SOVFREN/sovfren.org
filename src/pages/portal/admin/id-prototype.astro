@@ -8,6 +8,7 @@ import { fetchUserInfo } from '../../../lib/sso';
 import { getSession, clearSession } from '../../../lib/session';
 import { getRegisterRecord, type RegisterRecord } from '../../../lib/sovfhub';
 import { isAdminCompanion } from '../../../lib/admin';
+import { hasMark } from '../../../lib/idmarks';
 
 // Admin-only design prototype of the Certificate of the Identity, populated
 // with the signed-in admin's own details. Not an issued credential.
@@ -35,6 +36,9 @@ try {
   // Register API unreachable — render the card without record fields.
 }
 
+const hasThumbprint = await hasMark(profile.companion_number!, 'thumbprint');
+const hasSignature = await hasMark(profile.companion_number!, 'signature');
+
 const qr = await QRCode.toDataURL(
   new URL(`/register/${profile.companion_number}`, Astro.url.origin).href,
   { width: 300, margin: 1 },
@@ -52,6 +56,8 @@ const qr = await QRCode.toDataURL(
       sendingState={record?.familyName}
       photoUrl={record?.photoUrl}
       qrCodeDataUrl={qr}
+      thumbprintUrl={hasThumbprint ? '/portal/id-marks/thumbprint' : null}
+      signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
     />
   </section>
 </Layout>
