@@ -1,5 +1,6 @@
 ---
 import { code128B } from '../lib/barcode';
+import { firstNameFrom } from '../lib/idcards';
 
 // Certificate of the Identity card, laid out on the reference design's
 // 1016x638 grid. `standard` carries Sovfren marks only; `prototype` adds the
@@ -39,6 +40,8 @@ const {
 } = Astro.props;
 
 const proto = variant === 'prototype';
+// Name shows the given name only; the surname is the Sending State.
+const givenName = firstNameFrom(name, sendingState);
 // Prototype card: the barcode carries the Registered Post reference of the
 // posted Declaration of Life. Standard card: the Companion Number.
 const barcodeText = proto ? postRef : companionNumber;
@@ -61,7 +64,7 @@ const barcode = barcodeText ? code128B(barcodeText) : null;
 
       <div class="px white panel"></div>
       <div class="px fields">
-        <div><b>Name:</b> {name}</div>
+        <div><b>Name:</b> {givenName}</div>
         {proto ? (
           <>
             <div><b>Title:</b> {title}</div>
@@ -86,7 +89,7 @@ const barcode = barcodeText ? code128B(barcodeText) : null;
       <div class="px white lower"></div>
       {qrCodeDataUrl && <img class="px qr" src={qrCodeDataUrl} alt="Scan to view public Register record" />}
       <div class="px sig wide">
-        {signatureUrl ? <img src={signatureUrl} alt="Autograph" /> : name}
+        {signatureUrl ? <img src={signatureUrl} alt="Autograph" /> : givenName}
       </div>
       {barcode && (
         <svg

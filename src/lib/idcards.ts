@@ -217,3 +217,20 @@ export function surnameFrom(name: string, familyName?: string | null): string {
   if (name.includes(':') && afterColon) return afterColon;
   return name.trim().split(/\s+/).pop() ?? name;
 }
+
+// Name field on the card is the given name only (the surname goes in Sending
+// State). Keeps the trailing colon used in the Society's name style, e.g.
+// "Michael-ian : CURRY" -> "Michael-ian:".
+export function firstNameFrom(name: string, familyName?: string | null): string {
+  const trimmed = name.trim();
+  if (trimmed.includes(':')) {
+    const given = trimmed.split(':')[0].trim();
+    return given ? `${given}:` : trimmed;
+  }
+  if (familyName && trimmed.toLowerCase().endsWith(familyName.trim().toLowerCase())) {
+    const given = trimmed.slice(0, trimmed.length - familyName.trim().length).trim();
+    if (given) return given;
+  }
+  const words = trimmed.split(/\s+/);
+  return words.length > 1 ? words.slice(0, -1).join(' ') : trimmed;
+}
