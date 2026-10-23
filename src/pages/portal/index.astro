@@ -60,7 +60,7 @@ if (profile.companion_number) {
 }
 
 const registerUrl = profile.companion_number
-  ? new URL(`/register/${profile.companion_number}`, Astro.url.origin).href
+  ? new URL(`/register/${profile.companion_number}`, Astro.site ?? Astro.url.origin).href
   : null;
 const qrCodeDataUrl = registerUrl
   ? await QRCode.toDataURL(registerUrl, { width: 200, margin: 1 })

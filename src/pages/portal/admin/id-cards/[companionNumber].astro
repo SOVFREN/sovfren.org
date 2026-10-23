@@ -89,7 +89,7 @@ try {
   // Register API unreachable — preview renders without the photo.
 }
 const qr = await QRCode.toDataURL(
-  new URL(`/register/${card.companionNumber}`, Astro.url.origin).href,
+  new URL(`/register/${card.companionNumber}`, Astro.site ?? Astro.url.origin).href,
   { width: 300, margin: 1 },
 );
 

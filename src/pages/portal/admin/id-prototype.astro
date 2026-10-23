@@ -44,7 +44,7 @@ const hasFlag = await hasMark(profile.companion_number!, 'flag');
 const hasSignature = await hasMark(profile.companion_number!, 'signature');
 
 const qr = await QRCode.toDataURL(
-  new URL(`/register/${profile.companion_number}`, Astro.url.origin).href,
+  new URL(`/register/${profile.companion_number}`, Astro.site ?? Astro.url.origin).href,
   { width: 300, margin: 1 },
 );
 ---
