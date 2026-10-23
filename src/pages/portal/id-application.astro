@@ -117,12 +117,13 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [hasSeal, hasHeraldry, hasSignature, hasDeclaration, hasAffidavit] = await Promise.all([
+const [hasSeal, hasHeraldry, hasSignature, hasDeclaration, hasAffidavit, hasFlag] = await Promise.all([
   hasMark(companionNumber, 'seal'),
   hasMark(companionNumber, 'heraldry'),
   hasMark(companionNumber, 'signature'),
   hasMark(companionNumber, 'declaration'),
   hasMark(companionNumber, 'affidavit'),
+  hasMark(companionNumber, 'flag'),
 ]);
 
 let record: RegisterRecord | null = null;
@@ -273,6 +274,7 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
           qrCodeDataUrl={qrCodeDataUrl}
           sealUrl={hasSeal ? '/portal/id-marks/seal' : null}
           heraldryUrl={hasHeraldry ? '/portal/id-marks/heraldry' : null}
+          flagUrl={hasFlag ? '/portal/id-marks/flag' : null}
           signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
         />
       </div>

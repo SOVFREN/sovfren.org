@@ -19,6 +19,7 @@ interface Props {
   qrCodeDataUrl?: string | null;
   sealUrl?: string | null;
   heraldryUrl?: string | null;
+  flagUrl?: string | null;
   signatureUrl?: string | null;
 }
 
@@ -36,6 +37,7 @@ const {
   qrCodeDataUrl,
   sealUrl,
   heraldryUrl,
+  flagUrl,
   signatureUrl,
 } = Astro.props;
 
@@ -52,7 +54,11 @@ const barcode = barcodeText ? code128B(barcodeText) : null;
     <!-- FRONT -->
     <div class="face front">
       {proto ? (
-        <img class="px flag" src="/images/prototype/flag.png" alt="" />
+        flagUrl ? (
+          <img class="px flag custom" src={flagUrl} alt="Flag" />
+        ) : (
+          <img class="px flag" src="/images/prototype/flag.png" alt="" />
+        )
       ) : (
         <img class="px flag crest" src="/images/logo-small.png" alt="" />
       )}
@@ -205,6 +211,7 @@ const barcode = barcodeText ? code128B(barcodeText) : null;
   /* Geometry is the reference design's pixel grid as % of the 1016x638 card;
      font sizes are cqw (1cqw = 1% of card width). */
   .flag { left: 3.74%; top: 4.39%; width: 26.97%; height: 19.59%; object-fit: cover; }
+  .flag.custom { object-fit: contain; object-position: left center; }
   .flag.crest { object-fit: contain; background: #fff; padding: 1cqw; box-sizing: border-box; }
   .t-title { right: 5.5%; top: 4.1%; font-family: 'Arial Narrow', 'Liberation Sans Narrow', Arial, sans-serif; font-stretch: condensed; font-size: 4.3cqw; letter-spacing: -0.03em; white-space: nowrap; }
   .t-sub { right: 5.5%; top: 13.2%; font-size: 1.8cqw; white-space: nowrap; }

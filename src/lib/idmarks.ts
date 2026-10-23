@@ -7,8 +7,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export type MarkKind = 'seal' | 'heraldry' | 'signature' | 'declaration' | 'affidavit';
-export const MARK_KINDS: MarkKind[] = ['seal', 'heraldry', 'signature', 'declaration', 'affidavit'];
+export type MarkKind = 'seal' | 'heraldry' | 'signature' | 'declaration' | 'affidavit' | 'flag';
+export const MARK_KINDS: MarkKind[] = ['seal', 'heraldry', 'signature', 'declaration', 'affidavit', 'flag'];
 
 // Scanned documents: may be PDFs, larger, and are only ever downloaded.
 export const DOCUMENT_KINDS: MarkKind[] = ['declaration', 'affidavit'];
@@ -20,6 +20,7 @@ const MAX_BYTES: Record<MarkKind, number> = {
   signature: 4 * 1024 * 1024,
   declaration: 15 * 1024 * 1024,
   affidavit: 15 * 1024 * 1024,
+  flag: 4 * 1024 * 1024,
 };
 
 const baseDir = () => path.resolve(import.meta.env.ID_MARKS_DIR ?? 'data/id-marks');

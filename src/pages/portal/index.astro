@@ -40,14 +40,15 @@ if (Astro.request.method === 'POST' && profile.companion_number) {
 
 const idCard = await getCard(profile.companion_number);
 const hasIdCard = await canUseIdCard(profile.companion_number);
-const [hasSeal, hasHeraldry, hasSignature] =
+const [hasSeal, hasHeraldry, hasSignature, hasFlag] =
   profile.companion_number && hasIdCard
     ? await Promise.all([
         hasMark(profile.companion_number, 'seal'),
         hasMark(profile.companion_number, 'heraldry'),
         hasMark(profile.companion_number, 'signature'),
+        hasMark(profile.companion_number, 'flag'),
       ])
-    : [false, false, false];
+    : [false, false, false, false];
 
 let registerRecord: RegisterRecord | null = null;
 if (profile.companion_number) {
@@ -74,6 +75,7 @@ const qrCodeDataUrl = registerUrl
       sendingState={surnameFrom(profile.name ?? profile.preferred_username ?? '', registerRecord?.familyName)}
       sealUrl={hasSeal ? '/portal/id-marks/seal' : null}
       heraldryUrl={hasHeraldry ? '/portal/id-marks/heraldry' : null}
+      flagUrl={hasFlag ? '/portal/id-marks/flag' : null}
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
       title={idCard?.status === 'approved' ? idCard.title : undefined}
       aol={idCard?.status === 'approved' ? idCard.aol : undefined}

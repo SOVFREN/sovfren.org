@@ -6,7 +6,7 @@ import Layout from '../../../../layouts/Layout.astro';
 import CompanionCard from '../../../../components/CompanionCard.astro';
 import { requireAdmin } from '../../../../lib/admin';
 import { getRegisterRecord, type RegisterRecord } from '../../../../lib/sovfhub';
-import { hasMark } from '../../../../lib/idmarks';
+import { deleteMark, hasMark, saveMark } from '../../../../lib/idmarks';
 import {
   addNote,
   approveCard,
@@ -51,6 +51,16 @@ if (Astro.request.method === 'POST') {
       if (!text('reason')) throw new Error('Give a reason for revoking.');
       await revokeCard(card.companionNumber, adminNumber, text('reason'));
       message = 'Card revoked.';
+    } else if (action === 'flag') {
+      const file = form.get('flag');
+      if (!(file instanceof File) || file.size === 0) throw new Error('Choose a flag image first.');
+      await saveMark(card.companionNumber, 'flag', new Uint8Array(await file.arrayBuffer()));
+      await addNote(card.companionNumber, adminNumber, 'Flag changed');
+      message = 'Flag updated.';
+    } else if (action === 'reset-flag') {
+      await deleteMark(card.companionNumber, 'flag');
+      await addNote(card.companionNumber, adminNumber, 'Flag reset to default');
+      message = 'Flag reset to the default.';
     } else if (action === 'note') {
       if (!text('note')) throw new Error('Write a note first.');
       await addNote(card.companionNumber, adminNumber, text('note'));
@@ -62,12 +72,13 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [hasSeal, hasHeraldry, hasSignature, hasDeclaration, hasAffidavit] = await Promise.all([
+const [hasSeal, hasHeraldry, hasSignature, hasDeclaration, hasAffidavit, hasFlag] = await Promise.all([
   hasMark(card.companionNumber, 'seal'),
   hasMark(card.companionNumber, 'heraldry'),
   hasMark(card.companionNumber, 'signature'),
   hasMark(card.companionNumber, 'declaration'),
   hasMark(card.companionNumber, 'affidavit'),
+  hasMark(card.companionNumber, 'flag'),
 ]);
 const img = (kind: string) => `/portal/id-marks/${kind}?c=${card!.companionNumber}`;
 
@@ -133,8 +144,24 @@ const checkOk = card.postRef ? postRefCheckDigitValid(card.postRef) : null;
       qrCodeDataUrl={qr}
       sealUrl={hasSeal ? img('seal') : null}
       heraldryUrl={hasHeraldry ? img('heraldry') : null}
+      flagUrl={hasFlag ? img('flag') : null}
       signatureUrl={hasSignature ? img('signature') : null}
     />
+
+    <form method="post" enctype="multipart/form-data" class="form inline">
+      <input type="hidden" name="action" value="flag" />
+      <label>
+        Flag on the card front (the country or land they are on)
+        <input type="file" name="flag" accept="image/png,image/jpeg,image/webp" required />
+      </label>
+      <button type="submit" class="btn btn-outline-dark">{hasFlag ? 'Replace flag' : 'Set flag'}</button>
+    </form>
+    {hasFlag && (
+      <form method="post" class="form inline">
+        <input type="hidden" name="action" value="reset-flag" />
+        <button type="submit" class="link-btn">Reset to the default (England) flag</button>
+      </form>
+    )}
 
     <h2>Decision</h2>
     {card.status !== 'approved' && (
@@ -204,6 +231,7 @@ const checkOk = card.postRef ? postRefCheckDigitValid(card.postRef) : null;
   .form input:not([type='checkbox']) { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
   .form .verified { flex-direction: row; gap: 8px; align-items: flex-start; }
 
+  .link-btn { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 0.85rem; color: var(--sf-text-muted); text-decoration: underline; cursor: pointer; }
   .history { list-style: none; margin: 0 0 20px; padding: 0; font-size: 0.85rem; color: var(--sf-text); }
   .history li { padding: 6px 0; border-bottom: 1px solid var(--sf-border); }
   .history span { color: var(--sf-text-muted); margin-right: 6px; }

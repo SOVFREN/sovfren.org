@@ -40,6 +40,7 @@ try {
 const grant = await getGrant(profile.companion_number);
 const hasSeal = await hasMark(profile.companion_number!, 'seal');
 const hasHeraldry = await hasMark(profile.companion_number!, 'heraldry');
+const hasFlag = await hasMark(profile.companion_number!, 'flag');
 const hasSignature = await hasMark(profile.companion_number!, 'signature');
 
 const qr = await QRCode.toDataURL(
@@ -63,6 +64,7 @@ const qr = await QRCode.toDataURL(
       qrCodeDataUrl={qr}
       sealUrl={hasSeal ? '/portal/id-marks/seal' : null}
       heraldryUrl={hasHeraldry ? '/portal/id-marks/heraldry' : null}
+      flagUrl={hasFlag ? '/portal/id-marks/flag' : null}
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
     />
   </section>
