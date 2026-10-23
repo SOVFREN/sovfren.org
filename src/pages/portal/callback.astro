@@ -4,6 +4,7 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { exchangeCodeForTokens, fetchUserInfo } from '../../lib/sso';
 import { setSession } from '../../lib/session';
+import { isAdminCompanion } from '../../lib/admin';
 
 const url = Astro.url;
 const ssoError = url.searchParams.get('error');
@@ -32,6 +33,9 @@ if (ssoError === 'access_denied') {
     const profile = await fetchUserInfo(tokens.access_token);
     if (!profile.sovfren_org_access) {
       error = ACCESS_DENIED_MESSAGE;
+    } else if (!isAdminCompanion(profile.companion_number)) {
+      // The portal is restricted to admins for now; no session is created for anyone else.
+      error = 'The Companion Portal is currently closed.';
     } else {
       setSession(Astro, {
         accessToken: tokens.access_token,
