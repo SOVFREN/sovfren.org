@@ -4,9 +4,8 @@ export const prerender = false;
 import QRCode from 'qrcode';
 import Layout from '../../layouts/Layout.astro';
 import CompanionCard from '../../components/CompanionCard.astro';
-import { isAdminCompanion } from '../../lib/admin';
+import { getGrant, canUseIdCard, surnameFrom } from '../../lib/idcards';
 import {
-  hasIdMarksPermission,
   hasMark,
   saveMark,
   saveSignatureDataUrl,
@@ -32,7 +31,8 @@ try {
 let photoError: string | null = null;
 let marksError: string | null = null;
 let marksSaved: string | null = null;
-const canAddMarks = hasIdMarksPermission(profile.companion_number);
+const grant = await getGrant(profile.companion_number);
+const canAddMarks = await canUseIdCard(profile.companion_number);
 
 class MarksInputError extends Error {}
 
@@ -52,7 +52,7 @@ if (Astro.request.method === 'POST' && profile.companion_number) {
     }
   } else if (canAddMarks) {
     try {
-      if (action === 'signature' || action === 'thumbprint') {
+      if (action === 'signature' || action === 'logo') {
         if (form.get('consent') !== 'yes') {
           throw new MarksInputError('Please confirm your consent first.');
         }
@@ -60,19 +60,19 @@ if (Astro.request.method === 'POST' && profile.companion_number) {
           await saveSignatureDataUrl(companionNumber, String(form.get('signatureData') ?? ''));
           marksSaved = 'Autograph saved.';
         } else {
-          const file = form.get('thumbprint');
+          const file = form.get('logo');
           if (!(file instanceof File) || file.size === 0) {
-            throw new MarksInputError('Choose an image of your thumbprint.');
+            throw new MarksInputError('Choose an image of your private mark.');
           }
-          await saveMark(companionNumber, 'thumbprint', new Uint8Array(await file.arrayBuffer()));
-          marksSaved = 'Thumbprint saved.';
+          await saveMark(companionNumber, 'logo', new Uint8Array(await file.arrayBuffer()));
+          marksSaved = 'Private mark saved.';
         }
       } else if (action === 'remove-signature') {
         await deleteMark(companionNumber, 'signature');
         marksSaved = 'Autograph removed.';
-      } else if (action === 'remove-thumbprint') {
-        await deleteMark(companionNumber, 'thumbprint');
-        marksSaved = 'Thumbprint removed.';
+      } else if (action === 'remove-logo') {
+        await deleteMark(companionNumber, 'logo');
+        marksSaved = 'Private mark removed.';
       }
     } catch (e) {
       marksError =
@@ -83,8 +83,8 @@ if (Astro.request.method === 'POST' && profile.companion_number) {
   }
 }
 
-const hasThumbprint =
-  profile.companion_number && canAddMarks ? await hasMark(profile.companion_number, 'thumbprint') : false;
+const hasLogo =
+  profile.companion_number && canAddMarks ? await hasMark(profile.companion_number, 'logo') : false;
 const hasSignature =
   profile.companion_number && canAddMarks ? await hasMark(profile.companion_number, 'signature') : false;
 
@@ -109,15 +109,16 @@ const qrCodeDataUrl = registerUrl
     <h1>Welcome, {profile.name ?? profile.preferred_username}</h1>
 
     <CompanionCard
-      variant={isAdminCompanion(profile.companion_number) ? 'prototype' : 'standard'}
-      sendingState={registerRecord?.familyName}
-      thumbprintUrl={hasThumbprint ? '/portal/id-marks/thumbprint' : null}
+      variant={canAddMarks ? 'prototype' : 'standard'}
+      sendingState={surnameFrom(profile.name ?? profile.preferred_username ?? '', registerRecord?.familyName)}
+      logoUrl={hasLogo ? '/portal/id-marks/logo' : null}
+      title={grant?.title}
+      aol={grant?.aol}
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
       name={profile.name ?? profile.preferred_username}
       companionNumber={profile.companion_number}
       status={registerRecord?.status}
       expiryDate={registerRecord?.expiryDate}
-      title={registerRecord?.credentials}
       photoUrl={registerRecord?.photoUrl}
       qrCodeDataUrl={qrCodeDataUrl}
     />
@@ -136,10 +137,10 @@ const qrCodeDataUrl = registerUrl
 
     {canAddMarks && (
       <div class="photo-upload marks">
-        <h2>Thumbprint &amp; Autograph</h2>
+        <h2>Autograph &amp; Private Mark</h2>
         <p>
-          Available to Companions granted this permission. Your thumbprint image and autograph are
-          stored privately on the Society's server and appear only in their positions on your
+          Available once your Certificate of the Identity has been granted. Your autograph and private
+          mark are stored privately on the Society's server and appear only in their positions on your
           Certificate of the Identity.
         </p>
         {marksError && <p role="alert">{marksError}</p>}
@@ -166,22 +167,22 @@ const qrCodeDataUrl = registerUrl
           </form>
         )}
 
-        <h3>Thumbprint</h3>
+        <h3>Private mark</h3>
         <form method="post" enctype="multipart/form-data" class="marks-form">
-          <input type="hidden" name="action" value="thumbprint" />
-          <input type="file" name="thumbprint" accept="image/png,image/jpeg,image/webp" required />
+          <input type="hidden" name="action" value="logo" />
+          <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required />
           <label class="consent">
             <input type="checkbox" name="consent" value="yes" required />
-            I consent to the Society storing my thumbprint image and showing it on my card.
+            I consent to the Society storing my private mark and showing it on my card.
           </label>
           <div class="marks-actions">
-            <button type="submit" class="btn">{hasThumbprint ? 'Replace thumbprint' : 'Upload thumbprint'}</button>
+            <button type="submit" class="btn">{hasLogo ? 'Replace private mark' : 'Upload private mark'}</button>
           </div>
         </form>
-        {hasThumbprint && (
+        {hasLogo && (
           <form method="post">
-            <input type="hidden" name="action" value="remove-thumbprint" />
-            <button type="submit" class="link-btn">Remove thumbprint</button>
+            <input type="hidden" name="action" value="remove-logo" />
+            <button type="submit" class="link-btn">Remove private mark</button>
           </form>
         )}
       </div>

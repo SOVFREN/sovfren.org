@@ -1,0 +1,142 @@
+---
+export const prerender = false;
+
+import Layout from '../../../layouts/Layout.astro';
+import { fetchUserInfo } from '../../../lib/sso';
+import { getSession, clearSession } from '../../../lib/session';
+import { isAdminCompanion } from '../../../lib/admin';
+import { listGrants, saveGrant, revokeGrant } from '../../../lib/idcards';
+
+// Admin-only: grant or revoke a Companion's Certificate of the Identity after
+// their Declaration of Life has been verified in person. Name, Sending State
+// (surname), POL (Companion Number) and the QR come from the Companion's own
+// SovfHub details at render time; Title and AOL (apostille number) are set here.
+const session = await getSession(Astro);
+if (!session) {
+  return Astro.redirect('/portal/login');
+}
+
+let profile;
+try {
+  profile = await fetchUserInfo(session.accessToken);
+} catch {
+  clearSession(Astro);
+  return Astro.redirect('/portal/login');
+}
+
+if (!isAdminCompanion(profile.companion_number)) {
+  return new Response('Not found', { status: 404 });
+}
+
+let message: string | null = null;
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const companionNumber = String(form.get('companionNumber') ?? '').trim();
+
+  try {
+    if (action === 'grant') {
+      const title = String(form.get('title') ?? '').trim();
+      const aol = String(form.get('aol') ?? '').trim();
+      if (!/^[A-Za-z0-9]+$/.test(companionNumber)) throw new Error('Enter a valid Companion Number.');
+      if (!title || title.length > 60) throw new Error('Enter a Title (up to 60 characters).');
+      if (!aol || aol.length > 60) throw new Error('Enter the AOL (apostille) number.');
+      if (form.get('verified') !== 'yes') {
+        throw new Error('Confirm the Declaration of Life has been verified.');
+      }
+      await saveGrant({ companionNumber, title, aol });
+      message = `Card granted to ${companionNumber}.`;
+    } else if (action === 'revoke') {
+      await revokeGrant(companionNumber);
+      message = `Card revoked for ${companionNumber}.`;
+    }
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not save that.';
+  }
+}
+
+const grants = await listGrants();
+---
+<Layout title="Card grants" noindex>
+  <section class="wrap">
+    <h1>Certificate of the Identity — grants</h1>
+    <p class="note">
+      Grant a card only after the Companion has shown their Declaration of Life.
+      <a href="/portal/admin/id-prototype">View prototype card</a>
+    </p>
+
+    {error && <p role="alert">{error}</p>}
+    {message && <p role="status">{message}</p>}
+
+    <form method="post" class="grant-form">
+      <input type="hidden" name="action" value="grant" />
+      <label>Companion Number<input name="companionNumber" required placeholder="SovfCom00000001" /></label>
+      <label>Title<input name="title" required value="Consul-General" maxlength="60" /></label>
+      <label>AOL (apostille number)<input name="aol" required maxlength="60" /></label>
+      <label class="verified">
+        <input type="checkbox" name="verified" value="yes" required />
+        I have verified this Companion's Declaration of Life, including their thumbprint.
+      </label>
+      <button type="submit" class="btn">Grant / update card</button>
+    </form>
+
+    <h2>Granted cards</h2>
+    {grants.length === 0 ? (
+      <p class="note">None yet.</p>
+    ) : (
+      <ul class="grants">
+        {grants.map((g) => (
+          <li>
+            <span><strong>{g.companionNumber}</strong> · {g.title} · AOL {g.aol}</span>
+            <form method="post">
+              <input type="hidden" name="action" value="revoke" />
+              <input type="hidden" name="companionNumber" value={g.companionNumber} />
+              <button type="submit" class="link-btn">Revoke</button>
+            </form>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</Layout>
+
+<style>
+  .wrap { padding: 32px 0; max-width: 560px; }
+  .wrap h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--sf-text); }
+  .wrap h2 { font-size: 1.1rem; margin: 32px 0 8px; color: var(--sf-text); }
+  .note { margin: 0 0 20px; color: var(--sf-text-muted); font-size: 0.9rem; }
+
+  .grant-form { display: flex; flex-direction: column; gap: 14px; }
+  .grant-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
+  .grant-form input:not([type='checkbox']) {
+    padding: 10px 12px;
+    border: 1px solid var(--sf-border-strong);
+    border-radius: var(--sf-radius-md);
+    font: inherit;
+    color: var(--sf-text);
+  }
+  .grant-form .verified { flex-direction: row; gap: 8px; align-items: flex-start; }
+
+  .grants { list-style: none; margin: 0; padding: 0; }
+  .grants li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--sf-border);
+    font-size: 0.9rem;
+    color: var(--sf-text);
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--sf-text-muted);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+</style>

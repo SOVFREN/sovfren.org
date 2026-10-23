@@ -1,29 +1,16 @@
-// Thumbprint and autograph images for the Certificate of the Identity card.
+// Autograph and private-mark logo images for the Certificate of the Identity card.
 // Stored on this server (not SovfHub), one folder per Companion Number, and
 // only ever served back to that signed-in Companion by portal/id-marks/[kind].
-// Only Companions granted the special permission may add them.
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { isAdminCompanion } from './admin';
 
-export type MarkKind = 'thumbprint' | 'signature';
-export const MARK_KINDS: MarkKind[] = ['thumbprint', 'signature'];
+export type MarkKind = 'logo' | 'signature';
+export const MARK_KINDS: MarkKind[] = ['logo', 'signature'];
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
 const baseDir = () => path.resolve(import.meta.env.ID_MARKS_DIR ?? 'data/id-marks');
-
-// Companion Numbers granted the special permission (ID_SPECIAL_COMPANION_NUMBERS,
-// comma-separated). Admins always have it.
-export function hasIdMarksPermission(companionNumber?: string | null): boolean {
-  if (!companionNumber) return false;
-  if (isAdminCompanion(companionNumber)) return true;
-  return (import.meta.env.ID_SPECIAL_COMPANION_NUMBERS ?? '')
-    .split(',')
-    .map((n: string) => n.trim())
-    .includes(companionNumber);
-}
 
 function fileFor(companionNumber: string, kind: MarkKind): string {
   if (!/^[A-Za-z0-9]+$/.test(companionNumber)) throw new Error('Invalid Companion Number');

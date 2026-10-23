@@ -11,7 +11,6 @@ interface ImportMetaEnv {
   readonly SSO_USERINFO_URL: string;
   readonly SSO_REDIRECT_URI: string;
   readonly ADMIN_COMPANION_NUMBERS?: string;
-  readonly ID_SPECIAL_COMPANION_NUMBERS?: string;
   readonly ID_MARKS_DIR?: string;
 }
 

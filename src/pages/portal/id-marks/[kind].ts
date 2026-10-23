@@ -5,7 +5,7 @@ import { fetchUserInfo } from '../../../lib/sso';
 import { getSession } from '../../../lib/session';
 import { MARK_KINDS, readMark, type MarkKind } from '../../../lib/idmarks';
 
-// Serves the signed-in Companion's own thumbprint/autograph image, never anyone else's.
+// Serves the signed-in Companion's own autograph or logo image, never anyone else's.
 export const GET: APIRoute = async (Astro) => {
   const kind = Astro.params.kind as MarkKind;
   const session = await getSession(Astro);

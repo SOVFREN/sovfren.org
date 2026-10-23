@@ -11,11 +11,11 @@ interface Props {
   status?: 'valid' | 'expired' | 'revoked';
   title?: string | null;
   sendingState?: string | null;
-  dob?: string | null;
+  aol?: string | null;
   expiryDate?: string | null;
   photoUrl?: string | null;
   qrCodeDataUrl?: string | null;
-  thumbprintUrl?: string | null;
+  logoUrl?: string | null;
   signatureUrl?: string | null;
 }
 
@@ -26,11 +26,11 @@ const {
   status = 'valid',
   title,
   sendingState,
-  dob,
+  aol,
   expiryDate,
   photoUrl,
   qrCodeDataUrl,
-  thumbprintUrl,
+  logoUrl,
   signatureUrl,
 } = Astro.props;
 
@@ -59,9 +59,8 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
           <>
             <div><b>Title:</b> {title}</div>
             <div><b>Sending State:</b> {sendingState}</div>
-            <div><b>D.O.B:</b> {dob}</div>
             <div><b>POL</b>-{companionNumber}</div>
-            <div><b>AOL-</b></div>
+            <div><b>AOL</b>-{aol}</div>
           </>
         ) : (
           <>
@@ -79,13 +78,12 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
 
       <div class="px white lower"></div>
       {qrCodeDataUrl && <img class="px qr" src={qrCodeDataUrl} alt="Scan to view public Register record" />}
-      {thumbprintUrl && <img class="px print" src={thumbprintUrl} alt="Thumbprint" />}
-      <div class={thumbprintUrl ? 'px sig' : 'px sig wide'}>
+      <div class="px sig wide">
         {signatureUrl ? <img src={signatureUrl} alt="Autograph" /> : name}
       </div>
       {barcode && (
         <svg
-          class={thumbprintUrl ? 'px barcode' : 'px barcode wide'}
+          class="px barcode wide"
           viewBox={`0 0 ${barcode.width} 40`}
           preserveAspectRatio="none"
           aria-label={`Barcode for ${companionNumber}`}
@@ -93,7 +91,11 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
           {barcode.bars.map((b) => <rect x={b.x} y="0" width={b.width} height="40" />)}
         </svg>
       )}
-      <img class="px seal" src={proto ? '/images/prototype/seal.png' : '/images/crest.png'} alt="" />
+      {proto ? (
+        logoUrl && <img class="px seal" src={logoUrl} alt="Private mark" />
+      ) : (
+        <img class="px seal" src="/images/crest.png" alt="" />
+      )}
       <div class="px foot">This Certificate of the identity is registered with The Sovfren Society</div>
       {proto && <div class="mark">PROTOTYPE — NOT VALID</div>}
     </div>
@@ -207,7 +209,6 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
   .photo img { width: 100%; height: 100%; object-fit: cover; }
   .lower { left: 3.74%; top: 60.34%; width: 91.34%; height: 29.78%; }
   .qr { left: 3.74%; top: 63.95%; width: 15.75%; height: 25.08%; object-fit: contain; }
-  .print { left: 20.18%; top: 59.56%; width: 7.87%; height: 16.46%; object-fit: cover; }
   .sig { left: 28.54%; top: 63.95%; width: 40.85%; height: 12.85%; display: flex; align-items: center; color: #1d3fa0; font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 3.2cqw; background: #f3f6fa; white-space: nowrap; overflow: hidden; }
   .sig img { width: 100%; height: 100%; object-fit: contain; }
   .sig.wide { left: 21.5%; width: 47.9%; }

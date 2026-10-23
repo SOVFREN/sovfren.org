@@ -9,6 +9,7 @@ import { getSession, clearSession } from '../../../lib/session';
 import { getRegisterRecord, type RegisterRecord } from '../../../lib/sovfhub';
 import { isAdminCompanion } from '../../../lib/admin';
 import { hasMark } from '../../../lib/idmarks';
+import { getGrant, surnameFrom } from '../../../lib/idcards';
 
 // Admin-only design prototype of the Certificate of the Identity, populated
 // with the signed-in admin's own details. Not an issued credential.
@@ -36,7 +37,8 @@ try {
   // Register API unreachable — render the card without record fields.
 }
 
-const hasThumbprint = await hasMark(profile.companion_number!, 'thumbprint');
+const grant = await getGrant(profile.companion_number);
+const hasLogo = await hasMark(profile.companion_number!, 'logo');
 const hasSignature = await hasMark(profile.companion_number!, 'signature');
 
 const qr = await QRCode.toDataURL(
@@ -47,16 +49,17 @@ const qr = await QRCode.toDataURL(
 <Layout title="Certificate of Identity Prototype" noindex>
   <section class="wrap">
     <h1>Certificate of the Identity — design prototype</h1>
-    <p class="note">Design mock-up for review. Not an issued credential. Click the card to flip it.</p>
+    <p class="note">Design mock-up for review. Not an issued credential. Click the card to flip it. <a href="/portal/admin/id-cards">Manage card grants</a></p>
     <CompanionCard
       variant="prototype"
       name={profile.name ?? profile.preferred_username ?? ''}
       companionNumber={profile.companion_number}
-      title={record?.credentials}
-      sendingState={record?.familyName}
+      title={grant?.title ?? record?.credentials}
+      aol={grant?.aol}
+      sendingState={surnameFrom(profile.name ?? profile.preferred_username ?? '', record?.familyName)}
       photoUrl={record?.photoUrl}
       qrCodeDataUrl={qr}
-      thumbprintUrl={hasThumbprint ? '/portal/id-marks/thumbprint' : null}
+      logoUrl={hasLogo ? '/portal/id-marks/logo' : null}
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
     />
   </section>
