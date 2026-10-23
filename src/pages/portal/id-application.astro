@@ -207,6 +207,11 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
         <fieldset>
           <legend>Declaration of Life, Jurisdiction and Private Commerce <small>— your signed document</small></legend>
           <p class="hint">
+            Print your personal QR code on your Declaration so the document and your ID are joined:
+            <a href={`/portal/qr/${companionNumber}`}>Download PNG</a> ·
+            <a href={`/portal/qr/${companionNumber}?format=svg`}>Download SVG</a>
+          </p>
+          <p class="hint">
             Upload a clear scan or photo of your signed Declaration of Life, Jurisdiction and Private
             Commerce, including your thumbprint. Your reviewer uses it to confirm your details. It is
             stored privately and only you and the reviewer can open it. PDF, PNG, JPG or WEBP, up to 15MB.

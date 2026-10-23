@@ -125,6 +125,11 @@ const checkOk = card.postRef ? postRefCheckDigitValid(card.postRef) : null;
         <strong>not uploaded</strong>
       )}
     </p>
+    <p class="note">
+      QR code for their Declaration of Life (links the document and the ID):
+      <a href={`/portal/qr/${card.companionNumber}`}>Download PNG</a> ·
+      <a href={`/portal/qr/${card.companionNumber}?format=svg`}>Download SVG</a>
+    </p>
     {card.statement && <blockquote>{card.statement}</blockquote>}
 
     {error && <p role="alert" class="msg bad">{error}</p>}
