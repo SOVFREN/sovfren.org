@@ -3,12 +3,14 @@ export const prerender = false;
 
 import QRCode from 'qrcode';
 import Layout from '../../../layouts/Layout.astro';
-import { code128B } from '../../../lib/barcode';
+import CompanionCard from '../../../components/CompanionCard.astro';
 import { fetchUserInfo } from '../../../lib/sso';
 import { getSession, clearSession } from '../../../lib/session';
+import { getRegisterRecord, type RegisterRecord } from '../../../lib/sovfhub';
+import { isAdminCompanion } from '../../../lib/admin';
 
-// Admin-only: signed-in Companion whose number is in ADMIN_COMPANION_NUMBERS
-// (comma-separated; defaults to the Principal's number).
+// Admin-only design prototype of the Certificate of the Identity, populated
+// with the signed-in admin's own details. Not an issued credential.
 const session = await getSession(Astro);
 if (!session) {
   return Astro.redirect('/portal/login');
@@ -22,84 +24,35 @@ try {
   return Astro.redirect('/portal/login');
 }
 
-const admins = (import.meta.env.ADMIN_COMPANION_NUMBERS ?? 'SovfCom00000001')
-  .split(',')
-  .map((n: string) => n.trim());
-if (!profile.companion_number || !admins.includes(profile.companion_number)) {
+if (!isAdminCompanion(profile.companion_number)) {
   return new Response('Not found', { status: 404 });
 }
 
-// Design prototype only: sample data, not wired to any Companion record.
-const sample = {
-  name: 'Sample Companion:',
-  title: 'Consul-General',
-  state: 'SURNAME',
-  dob: '01-01-1990',
-  pol: 'SovfCom00000000',
-};
+let record: RegisterRecord | null = null;
+try {
+  record = await getRegisterRecord(profile.companion_number!);
+} catch {
+  // Register API unreachable — render the card without record fields.
+}
 
-const qr = await QRCode.toDataURL('https://sovfren.org/register', { width: 300, margin: 1 });
-const barcode = code128B('NZ1416687O7GB');
+const qr = await QRCode.toDataURL(
+  new URL(`/register/${profile.companion_number}`, Astro.url.origin).href,
+  { width: 300, margin: 1 },
+);
 ---
 <Layout title="Certificate of Identity Prototype" noindex>
   <section class="wrap">
     <h1>Certificate of the Identity — design prototype</h1>
-    <p class="note">Design mock-up with sample data for review. Not an issued credential.</p>
-
-    <div class="card front">
-      <img class="px flag" src="/images/prototype/flag.png" alt="" />
-      <div class="px t-title">CERTIFICATE OF THE IDENTITY</div>
-      <div class="px t-sub">Issued under the law of England &amp; Wales</div>
-      <div class="px t-class">DIPLOMATIC</div>
-
-      <div class="px white panel"></div>
-      <div class="px fields">
-        <div><b>Name:</b> {sample.name}</div>
-        <div><b>Title:</b> {sample.title}</div>
-        <div><b>Sending State:</b> {sample.state}</div>
-        <div><b>D.O.B:</b> {sample.dob}</div>
-        <div><b>POL</b>-{sample.pol}</div>
-        <div><b>AOL-</b></div>
-      </div>
-      <img class="px stamp" src="/images/prototype/stamp.png" alt="" />
-      <div class="px photo">Photo</div>
-
-      <div class="px white lower"></div>
-      <img class="px qr" src={qr} alt="" />
-      <img class="px print" src="/images/prototype/fingerprint.png" alt="" />
-      <div class="px sig">{sample.name}</div>
-      <svg class="px barcode" viewBox={`0 0 ${barcode.width} 40`} preserveAspectRatio="none">
-        {barcode.bars.map((b) => <rect x={b.x} y="0" width={b.width} height="40" />)}
-      </svg>
-      <img class="px seal" src="/images/prototype/seal.png" alt="" />
-      <div class="px foot">This Certificate of the identity is registered with The Sovfren Society</div>
-      <div class="mark">PROTOTYPE — NOT VALID</div>
-    </div>
-
-    <div class="card back">
-      <div class="px b-head">Declared by his majesty's royal charters &amp; letters patent 1835</div>
-      <p class="px b-text">
-        For the knowledge of the Federation Trust, the Universal Law Commission and all global civil
-        authorities: I am a free and living man, a universal declaration of the human rights holder,
-        union member under assembly and diplomatic privileges (UPU Order). Status declared: Free
-        inhabitant; not a corporation, debtor, surety, or trustee. Not a vessel, transmitting
-        utility, or legal fiction. Not subject to statutory jurisdiction where no lawful contract
-        exists. No consent to administrative or commercial presumptions. No joinder with any
-        artificial person bearing a similar name. All rights reserved without prejudice No liability
-        accepted without full disclosure and verified claim. Notice to agents is notice to
-        principals; notice to principals is notice to agents. Any claim must be supported by sworn
-        affidavit and wet-ink contract. Public record: Unlawful claims are rejected. Silent
-        acquiescence is denied. Any commercial instrument sent without proof of claim constitutes
-        fraud and dishonour. All matters must be settled in equity under natural law. Union member
-        under Diplomatic Privileges (UPU Order).
-      </p>
-      <img class="px un" src="/images/prototype/un.png" alt="" />
-      <img class="px arms" src="/images/prototype/arms.png" alt="" />
-      <img class="px ems" src="/images/prototype/ems.png" alt="" />
-      <img class="px stripes" src="/images/prototype/ems-stripes.png" alt="" />
-      <div class="px care">Aux soins du Consul d'<br />{sample.state}</div>
-      <div class="mark">PROTOTYPE — NOT VALID</div>
-    </div>
+    <p class="note">Design mock-up for review. Not an issued credential. Click the card to flip it.</p>
+    <CompanionCard
+      variant="prototype"
+      name={profile.name ?? profile.preferred_username ?? ''}
+      companionNumber={profile.companion_number}
+      title={record?.credentials}
+      sendingState={record?.familyName}
+      photoUrl={record?.photoUrl}
+      qrCodeDataUrl={qr}
+    />
   </section>
 </Layout>
 
@@ -107,61 +60,4 @@ const barcode = code128B('NZ1416687O7GB');
   .wrap { padding: 32px 0; }
   .wrap h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--sf-text); }
   .note { margin: 0 0 24px; color: var(--sf-text-muted); font-size: 0.9rem; }
-
-  .card {
-    container-type: inline-size;
-    position: relative;
-    max-width: 800px;
-    aspect-ratio: 1016 / 638;
-    margin-bottom: 28px;
-    background: linear-gradient(180deg, #4aa3e0 0%, #2d8fd6 100%);
-    color: #fff;
-    font-family: Arial, Helvetica, sans-serif;
-    overflow: hidden;
-    box-shadow: var(--sf-shadow);
-  }
-  .px { position: absolute; }
-  .white { background: #fff; }
-
-  /* front — positions are the reference design's pixel coordinates */
-  .flag { left: 3.74%; top: 4.389%; width: 26.969%; height: 19.592%; }
-  .t-title { left: 34.941%; top: 4.075%; font-size: 4.528cqw; letter-spacing: -0.01em; white-space: nowrap; }
-  .t-sub { left: 55.315%; top: 13.167%; font-size: 1.772cqw; white-space: nowrap; }
-  .t-class { left: 71.063%; top: 17.242%; font-size: 3.445cqw; }
-  .panel { left: 3.74%; top: 23.981%; width: 91.339%; height: 36.364%; }
-  .fields { left: 4.724%; top: 23.981%; color: #111; font-size: 3.248cqw; line-height: 1.05; padding-top: 0.627%; }
-  .stamp { left: 48.72%; top: 29.781%; width: 20.177%; height: 28.214%; }
-  .photo { left: 69.98%; top: 23.981%; width: 25.098%; height: 36.364%; background: #cfd9e4; color: #5f728c; display: flex; align-items: center; justify-content: center; font-size: 2.362cqw; }
-  .lower { left: 3.74%; top: 60.345%; width: 91.339%; height: 29.781%; }
-  .qr { left: 3.74%; top: 63.949%; width: 15.748%; height: 25.078%; }
-  .print { left: 20.177%; top: 59.562%; width: 7.874%; height: 16.458%; }
-  .sig { left: 28.543%; top: 63.949%; width: 40.846%; height: 12.853%; display: flex; align-items: center; color: #1d3fa0; font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 4.528cqw; background: #f3f6fa; white-space: nowrap; overflow: hidden; }
-  .barcode { left: 22.146%; top: 77.899%; width: 46.26%; height: 10.189%; fill: #111; }
-  .seal { left: 74.311%; top: 60.345%; width: 20.669%; height: 29.781%; }
-  .foot { left: 0; right: 0; top: 90.596%; text-align: center; font-size: 1.772cqw; }
-
-  /* back */
-  .b-head { left: 0; right: 0; top: 8.15%; text-align: center; font-size: 2.953cqw; }
-  .b-text { left: 4.035%; top: 15.361%; width: 92.126%; height: 47.962%; margin: 0; box-sizing: border-box; padding: 0.787cqw 0.886cqw; background: #fff; color: #111; font-size: 2.008cqw; line-height: 1.42; }
-  .un { left: 3.74%; top: 70.219%; width: 15.453%; height: 24.609%; }
-  .arms { left: 22.146%; top: 68.182%; width: 14.764%; height: 25.862%; }
-  .ems { left: 37.894%; top: 78.371%; width: 37.5%; height: 15.987%; }
-  .stripes { left: 75.591%; top: 79.154%; width: 19.094%; height: 6.739%; }
-  .care { left: 75.394%; top: 87.147%; font-size: 1.969cqw; line-height: 1.15; }
-
-  .mark {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transform: rotate(-18deg);
-    font-size: 7cqw;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    color: rgba(190, 20, 20, 0.35);
-    text-shadow: 0 0 0.4cqw rgba(255, 255, 255, 0.6);
-    pointer-events: none;
-    white-space: nowrap;
-  }
 </style>
