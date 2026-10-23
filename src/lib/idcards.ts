@@ -1,60 +1,170 @@
-// Certificate of the Identity grants. A grant is created by an admin after the
-// Companion has shown their Declaration of Life (verified in person); it holds
-// the card fields that are not pulled from SovfHub. Stored on this server as
-// one JSON file per Companion Number under ID_MARKS_DIR/grants.
+// Certificate of the Identity records and application workflow.
+//
+// One JSON record per Companion Number under ID_MARKS_DIR/cards. A Companion
+// applies (status "submitted"); an admin reviews their Declaration of Life in
+// person, then approves (setting Title and the AOL apostille number), rejects
+// with a reason, or later revokes. Every change is appended to `history`.
 
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isAdminCompanion } from './admin';
 
-export interface CardGrant {
+export type CardStatus = 'submitted' | 'approved' | 'rejected' | 'revoked';
+
+export interface CardEvent {
+  at: string;
+  by: string;
+  action: string;
+  note?: string;
+}
+
+export interface CardRecord {
   companionNumber: string;
-  title: string; // e.g. "Consul-General"
-  aol: string; // apostille number
-  grantedAt: string;
+  name: string;
+  status: CardStatus;
+  requestedTitle: string;
+  statement: string;
+  title?: string; // set on approval
+  aol?: string; // apostille number, set on approval
+  submittedAt?: string;
+  decidedAt?: string;
+  rejectionReason?: string;
+  history: CardEvent[];
 }
 
-const dir = () => path.resolve(import.meta.env.ID_MARKS_DIR ?? 'data/id-marks', 'grants');
+const dir = () => path.resolve(import.meta.env.ID_MARKS_DIR ?? 'data/id-marks', 'cards');
 
-function fileFor(companionNumber: string): string {
-  if (!/^[A-Za-z0-9]+$/.test(companionNumber)) throw new Error('Invalid Companion Number');
-  return path.join(dir(), `${companionNumber}.json`);
-}
+const validNumber = (n: string) => /^[A-Za-z0-9]+$/.test(n);
 
-export async function getGrant(companionNumber?: string | null): Promise<CardGrant | null> {
-  if (!companionNumber || !/^[A-Za-z0-9]+$/.test(companionNumber)) return null;
+export async function getCard(companionNumber?: string | null): Promise<CardRecord | null> {
+  if (!companionNumber || !validNumber(companionNumber)) return null;
   try {
-    return JSON.parse(await readFile(fileFor(companionNumber), 'utf8')) as CardGrant;
+    return JSON.parse(await readFile(path.join(dir(), `${companionNumber}.json`), 'utf8')) as CardRecord;
   } catch {
     return null;
   }
 }
 
-export async function saveGrant(grant: Omit<CardGrant, 'grantedAt'>): Promise<void> {
+async function write(card: CardRecord): Promise<void> {
   await mkdir(dir(), { recursive: true });
-  const full: CardGrant = { ...grant, grantedAt: new Date().toISOString() };
-  await writeFile(fileFor(grant.companionNumber), JSON.stringify(full, null, 2));
+  await writeFile(path.join(dir(), `${card.companionNumber}.json`), JSON.stringify(card, null, 2));
 }
 
-export async function revokeGrant(companionNumber: string): Promise<void> {
-  await rm(fileFor(companionNumber), { force: true });
+function log(card: CardRecord, by: string, action: string, note?: string): void {
+  card.history.push({ at: new Date().toISOString(), by, action, ...(note ? { note } : {}) });
 }
 
-export async function listGrants(): Promise<CardGrant[]> {
+export async function listCards(): Promise<CardRecord[]> {
   try {
     const files = await readdir(dir());
-    const grants = await Promise.all(
-      files.filter((f) => f.endsWith('.json')).map((f) => getGrant(f.slice(0, -5))),
+    const cards = await Promise.all(
+      files.filter((f) => f.endsWith('.json')).map((f) => getCard(f.slice(0, -5))),
     );
-    return grants.filter((g): g is CardGrant => g !== null).sort((a, b) => a.companionNumber.localeCompare(b.companionNumber));
+    return cards.filter((c): c is CardRecord => c !== null);
   } catch {
     return [];
   }
 }
 
-// Admins can always use the card tools; everyone else needs a grant.
+// The approved card, or null — this is what decides whether a Companion gets the card.
+export async function getGrant(companionNumber?: string | null): Promise<CardRecord | null> {
+  const card = await getCard(companionNumber);
+  return card?.status === 'approved' ? card : null;
+}
+
+// Admins can always use the card tools; everyone else needs an approved card.
 export async function canUseIdCard(companionNumber?: string | null): Promise<boolean> {
   return isAdminCompanion(companionNumber) || (await getGrant(companionNumber)) !== null;
+}
+
+export interface ApplicationInput {
+  requestedTitle: string;
+  statement: string;
+}
+
+// Companion submits (or resubmits after a rejection/revocation). Approved cards
+// can't be re-applied for; their marks are updated in place via noteMarksUpdated.
+export async function submitApplication(
+  companionNumber: string,
+  name: string,
+  input: ApplicationInput,
+): Promise<CardRecord> {
+  const existing = await getCard(companionNumber);
+  if (existing?.status === 'approved' || existing?.status === 'submitted') {
+    throw new Error('Application already in progress or approved');
+  }
+  const card: CardRecord = existing ?? {
+    companionNumber,
+    name,
+    status: 'submitted',
+    requestedTitle: '',
+    statement: '',
+    history: [],
+  };
+  card.name = name;
+  card.status = 'submitted';
+  card.requestedTitle = input.requestedTitle;
+  card.statement = input.statement;
+  card.submittedAt = new Date().toISOString();
+  delete card.rejectionReason;
+  log(card, companionNumber, existing ? 'resubmitted' : 'submitted');
+  await write(card);
+  return card;
+}
+
+export async function noteMarksUpdated(companionNumber: string): Promise<void> {
+  const card = await getCard(companionNumber);
+  if (!card) return;
+  log(card, companionNumber, 'marks updated');
+  await write(card);
+}
+
+export async function approveCard(
+  companionNumber: string,
+  by: string,
+  input: { title: string; aol: string; name?: string },
+): Promise<void> {
+  const card: CardRecord = (await getCard(companionNumber)) ?? {
+    companionNumber,
+    name: input.name ?? '',
+    status: 'submitted',
+    requestedTitle: input.title,
+    statement: '',
+    history: [],
+  };
+  card.status = 'approved';
+  card.title = input.title;
+  card.aol = input.aol;
+  card.decidedAt = new Date().toISOString();
+  delete card.rejectionReason;
+  log(card, by, 'approved', `${input.title} · AOL ${input.aol}`);
+  await write(card);
+}
+
+export async function rejectCard(companionNumber: string, by: string, reason: string): Promise<void> {
+  const card = await getCard(companionNumber);
+  if (!card) throw new Error('No such application');
+  card.status = 'rejected';
+  card.rejectionReason = reason;
+  card.decidedAt = new Date().toISOString();
+  log(card, by, 'rejected', reason);
+  await write(card);
+}
+
+export async function revokeCard(companionNumber: string, by: string, reason: string): Promise<void> {
+  const card = await getCard(companionNumber);
+  if (!card) throw new Error('No such card');
+  card.status = 'revoked';
+  card.decidedAt = new Date().toISOString();
+  log(card, by, 'revoked', reason);
+  await write(card);
+}
+
+export async function addNote(companionNumber: string, by: string, note: string): Promise<void> {
+  const card = await getCard(companionNumber);
+  if (!card) throw new Error('No such card');
+  log(card, by, 'note', note);
+  await write(card);
 }
 
 // Sending State is the Companion's surname. Prefer the Register record's

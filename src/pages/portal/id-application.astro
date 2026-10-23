@@ -1,0 +1,289 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../layouts/Layout.astro';
+import CompanionCard from '../../components/CompanionCard.astro';
+import { fetchUserInfo } from '../../lib/sso';
+import { getSession, clearSession } from '../../lib/session';
+import { getRegisterRecord, type RegisterRecord } from '../../lib/sovfhub';
+import { getCard, submitApplication, noteMarksUpdated, surnameFrom } from '../../lib/idcards';
+import { hasMark, saveMark, saveSignatureDataUrl } from '../../lib/idmarks';
+
+// Companion-facing application for the Certificate of the Identity: private
+// seal (front of card), private estate heraldry (back), autograph, requested
+// title. An admin reviews it at /portal/admin/id-cards.
+const session = await getSession(Astro);
+if (!session) {
+  return Astro.redirect('/portal/login');
+}
+
+let profile;
+try {
+  profile = await fetchUserInfo(session.accessToken);
+} catch {
+  clearSession(Astro);
+  return Astro.redirect('/portal/login');
+}
+
+const companionNumber = profile.companion_number;
+if (!companionNumber) {
+  return Astro.redirect('/portal');
+}
+const displayName = profile.name ?? profile.preferred_username ?? '';
+
+let card = await getCard(companionNumber);
+let error: string | null = null;
+let saved: string | null = null;
+
+class InputError extends Error {}
+
+async function readImage(form: FormData, field: string): Promise<Uint8Array | null> {
+  const file = form.get(field);
+  if (!(file instanceof File) || file.size === 0) return null;
+  return new Uint8Array(await file.arrayBuffer());
+}
+
+if (Astro.request.method === 'POST') {
+  try {
+    if (card?.status === 'submitted') throw new InputError('Your application is already with the reviewer.');
+    const form = await Astro.request.formData();
+    if (form.get('consent') !== 'yes') throw new InputError('Please confirm your consent first.');
+
+    const approved = card?.status === 'approved';
+    const requestedTitle = String(form.get('requestedTitle') ?? '').trim();
+    const statement = String(form.get('statement') ?? '').trim();
+    if (!approved && (!requestedTitle || requestedTitle.length > 60)) {
+      throw new InputError('Enter the Title you are applying for (up to 60 characters).');
+    }
+    if (statement.length > 1000) throw new InputError('Keep your statement under 1000 characters.');
+
+    const seal = await readImage(form, 'seal');
+    const heraldry = await readImage(form, 'heraldry');
+    const signatureData = String(form.get('signatureData') ?? '');
+
+    if (seal) await saveMark(companionNumber, 'seal', seal);
+    if (heraldry) await saveMark(companionNumber, 'heraldry', heraldry);
+    if (signatureData) await saveSignatureDataUrl(companionNumber, signatureData);
+
+    if (!approved) {
+      const missing = [
+        !(await hasMark(companionNumber, 'seal')) && 'private seal',
+        !(await hasMark(companionNumber, 'heraldry')) && 'estate heraldic symbol',
+        !(await hasMark(companionNumber, 'signature')) && 'autograph',
+      ].filter(Boolean);
+      if (missing.length) throw new InputError(`Please provide your ${missing.join(', ')}.`);
+      await submitApplication(companionNumber, displayName, { requestedTitle, statement });
+      saved = 'Application submitted. You will see the decision here.';
+    } else {
+      await noteMarksUpdated(companionNumber);
+      saved = 'Your card has been updated.';
+    }
+    card = await getCard(companionNumber);
+  } catch (e) {
+    error =
+      e instanceof InputError
+        ? e.message
+        : 'Could not save that. Please use PNG, JPG or WEBP images under 4MB.';
+  }
+}
+
+const [hasSeal, hasHeraldry, hasSignature] = await Promise.all([
+  hasMark(companionNumber, 'seal'),
+  hasMark(companionNumber, 'heraldry'),
+  hasMark(companionNumber, 'signature'),
+]);
+
+let record: RegisterRecord | null = null;
+try {
+  record = await getRegisterRecord(companionNumber);
+} catch {
+  // Register API unreachable — preview renders without the photo.
+}
+const qrCodeDataUrl = await QRCode.toDataURL(
+  new URL(`/register/${companionNumber}`, Astro.url.origin).href,
+  { width: 300, margin: 1 },
+);
+
+const status = card?.status;
+const locked = status === 'submitted';
+const showForm = !locked;
+const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
+---
+<Layout title="Certificate of the Identity" noindex>
+  <section class="wrap">
+    <p class="back"><a href="/portal">← Companion Portal</a></p>
+    <h1>Certificate of the Identity</h1>
+
+    {status === 'submitted' && (
+      <p class="status pending">Application submitted — awaiting review. Bring your Declaration of Life to your reviewer if you have not already.</p>
+    )}
+    {status === 'approved' && (
+      <p class="status ok">Approved: {card?.title}{card?.aol ? ` · AOL ${card.aol}` : ''}. You can update your seal, heraldry or autograph below.</p>
+    )}
+    {status === 'rejected' && (
+      <p class="status bad">Not approved{card?.rejectionReason ? `: ${card.rejectionReason}` : '.'} You can update your details and apply again.</p>
+    )}
+    {status === 'revoked' && (
+      <p class="status bad">Your card has been revoked. You can apply again.</p>
+    )}
+    {!status && (
+      <p class="intro">
+        Apply for your Certificate of the Identity. Provide your private seal (printed on the front),
+        your private estate heraldic symbol (printed on the back) and your autograph. Your reviewer
+        will verify your Declaration of Life, including your thumbprint, in person before the card is
+        granted.
+      </p>
+    )}
+
+    {error && <p role="alert" class="status bad">{error}</p>}
+    {saved && <p role="status" class="status ok">{saved}</p>}
+
+    {showForm && (
+      <form method="post" enctype="multipart/form-data" class="form" data-application-form>
+        <input type="hidden" name="signatureData" />
+
+        {status !== 'approved' && (
+          <>
+            <label>
+              Title applied for
+              <input name="requestedTitle" required maxlength="60" value={card?.requestedTitle ?? ''} placeholder="e.g. Consul-General" />
+            </label>
+            <label>
+              Statement (optional)
+              <textarea name="statement" rows="3" maxlength="1000">{card?.statement ?? ''}</textarea>
+            </label>
+          </>
+        )}
+
+        <fieldset>
+          <legend>Private seal <small>— front of card</small></legend>
+          {hasSeal && <img class="thumb" src="/portal/id-marks/seal" alt="Current private seal" />}
+          <input type="file" name="seal" accept="image/png,image/jpeg,image/webp" required={!hasSeal} />
+        </fieldset>
+
+        <fieldset>
+          <legend>Private estate heraldic symbol <small>— back of card</small></legend>
+          {hasHeraldry && <img class="thumb" src="/portal/id-marks/heraldry" alt="Current estate heraldic symbol" />}
+          <input type="file" name="heraldry" accept="image/png,image/jpeg,image/webp" required={!hasHeraldry} />
+        </fieldset>
+
+        <fieldset>
+          <legend>Autograph <small>— draw with finger, stylus or mouse</small></legend>
+          {hasSignature && <img class="thumb sig-thumb" src="/portal/id-marks/signature" alt="Current autograph" />}
+          <canvas class="sig-pad" width="800" height="240" aria-label="Draw your autograph"></canvas>
+          <button type="button" class="link-btn" data-sig-clear>Clear</button>
+        </fieldset>
+
+        <label class="consent">
+          <input type="checkbox" name="consent" value="yes" required />
+          I consent to the Society storing these images and showing them on my card.
+        </label>
+
+        <button type="submit" class="btn">
+          {status === 'approved' ? 'Update my card' : status === 'rejected' || status === 'revoked' ? 'Resubmit application' : 'Submit application'}
+        </button>
+      </form>
+    )}
+
+    {hasAnyMark && (
+      <div class="preview">
+        <h2>Preview</h2>
+        <CompanionCard
+          variant="prototype"
+          name={displayName}
+          companionNumber={companionNumber}
+          title={card?.title ?? card?.requestedTitle}
+          aol={card?.aol}
+          sendingState={surnameFrom(displayName, record?.familyName)}
+          photoUrl={record?.photoUrl}
+          qrCodeDataUrl={qrCodeDataUrl}
+          sealUrl={hasSeal ? '/portal/id-marks/seal' : null}
+          heraldryUrl={hasHeraldry ? '/portal/id-marks/heraldry' : null}
+          signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
+        />
+      </div>
+    )}
+  </section>
+</Layout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-application-form]');
+  const canvas = form?.querySelector<HTMLCanvasElement>('.sig-pad');
+  const ctx = canvas?.getContext('2d');
+  if (form && canvas && ctx) {
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1d3fa0';
+    let drawing = false;
+    let inked = false;
+    const pos = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      return [((e.clientX - r.left) * canvas.width) / r.width, ((e.clientY - r.top) * canvas.height) / r.height];
+    };
+    canvas.addEventListener('pointerdown', (e) => {
+      drawing = true;
+      canvas.setPointerCapture(e.pointerId);
+      const [x, y] = pos(e);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 0.01, y);
+      ctx.stroke();
+      inked = true;
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drawing) return;
+      const [x, y] = pos(e);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    });
+    const stop = () => {
+      drawing = false;
+    };
+    canvas.addEventListener('pointerup', stop);
+    canvas.addEventListener('pointercancel', stop);
+    form.querySelector('[data-sig-clear]')?.addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      inked = false;
+    });
+    // Only send a new autograph if one was drawn; otherwise the stored one is kept.
+    form.addEventListener('submit', () => {
+      (form.elements.namedItem('signatureData') as HTMLInputElement).value = inked
+        ? canvas.toDataURL('image/png')
+        : '';
+    });
+  }
+</script>
+
+<style>
+  .wrap { padding: 32px 0; max-width: 640px; }
+  .back { margin: 0 0 12px; font-size: 0.85rem; }
+  .wrap h1 { font-size: 1.5rem; margin: 0 0 16px; color: var(--sf-text); }
+  .wrap h2 { font-size: 1.1rem; margin: 32px 0 12px; color: var(--sf-text); }
+  .intro { color: var(--sf-text-muted); font-size: 0.9rem; margin: 0 0 20px; }
+
+  .status { padding: 12px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; margin: 0 0 16px; }
+  .status.pending { background: rgba(22, 98, 214, 0.1); color: var(--sf-ink); }
+  .status.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
+  .status.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
+
+  .form { display: flex; flex-direction: column; gap: 18px; }
+  .form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
+  .form input:not([type='checkbox']):not([type='file']),
+  .form textarea {
+    padding: 10px 12px;
+    border: 1px solid var(--sf-border-strong);
+    border-radius: var(--sf-radius-md);
+    font: inherit;
+    color: var(--sf-text);
+  }
+  fieldset { border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  legend { font-size: 0.9rem; font-weight: 600; color: var(--sf-text); padding: 0 6px; }
+  legend small { font-weight: 400; color: var(--sf-text-muted); }
+  .thumb { max-width: 120px; max-height: 120px; object-fit: contain; background: #fff; border: 1px solid var(--sf-border); border-radius: 8px; padding: 4px; }
+  .sig-thumb { max-width: 220px; max-height: 70px; }
+  .sig-pad { width: 100%; max-width: 400px; aspect-ratio: 10 / 3; background: #fff; border: 1px dashed var(--sf-border-strong); border-radius: var(--sf-radius-md); touch-action: none; cursor: crosshair; }
+  .form .consent { flex-direction: row; gap: 8px; align-items: flex-start; font-size: 0.8rem; }
+  .link-btn { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; color: var(--sf-text-muted); text-decoration: underline; cursor: pointer; }
+</style>

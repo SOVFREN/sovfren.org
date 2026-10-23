@@ -1,0 +1,180 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../../../layouts/Layout.astro';
+import CompanionCard from '../../../../components/CompanionCard.astro';
+import { requireAdmin } from '../../../../lib/admin';
+import { getRegisterRecord, type RegisterRecord } from '../../../../lib/sovfhub';
+import { hasMark } from '../../../../lib/idmarks';
+import {
+  addNote,
+  approveCard,
+  getCard,
+  rejectCard,
+  revokeCard,
+  surnameFrom,
+} from '../../../../lib/idcards';
+
+// Review page for one Companion's Certificate of the Identity application.
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+const adminNumber = gate.profile.companion_number!;
+
+const { companionNumber } = Astro.params;
+let card = await getCard(companionNumber);
+if (!card) return new Response('Not found', { status: 404 });
+
+let message: string | null = null;
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const text = (k: string) => String(form.get(k) ?? '').trim();
+  try {
+    if (action === 'approve') {
+      if (!text('title') || text('title').length > 60) throw new Error('Enter a Title (up to 60 characters).');
+      if (!text('aol') || text('aol').length > 60) throw new Error('Enter the AOL (apostille) number.');
+      if (form.get('verified') !== 'yes') throw new Error('Confirm the Declaration of Life has been verified.');
+      await approveCard(card.companionNumber, adminNumber, { title: text('title'), aol: text('aol') });
+      message = 'Card approved.';
+    } else if (action === 'reject') {
+      if (!text('reason')) throw new Error('Give a reason so the Companion knows what to fix.');
+      await rejectCard(card.companionNumber, adminNumber, text('reason'));
+      message = 'Application rejected.';
+    } else if (action === 'revoke') {
+      if (!text('reason')) throw new Error('Give a reason for revoking.');
+      await revokeCard(card.companionNumber, adminNumber, text('reason'));
+      message = 'Card revoked.';
+    } else if (action === 'note') {
+      if (!text('note')) throw new Error('Write a note first.');
+      await addNote(card.companionNumber, adminNumber, text('note'));
+      message = 'Note added.';
+    }
+    card = (await getCard(card.companionNumber))!;
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not save that.';
+  }
+}
+
+const [hasSeal, hasHeraldry, hasSignature] = await Promise.all([
+  hasMark(card.companionNumber, 'seal'),
+  hasMark(card.companionNumber, 'heraldry'),
+  hasMark(card.companionNumber, 'signature'),
+]);
+const img = (kind: string) => `/portal/id-marks/${kind}?c=${card!.companionNumber}`;
+
+let record: RegisterRecord | null = null;
+try {
+  record = await getRegisterRecord(card.companionNumber);
+} catch {
+  // Register API unreachable — preview renders without the photo.
+}
+const qr = await QRCode.toDataURL(
+  new URL(`/register/${card.companionNumber}`, Astro.url.origin).href,
+  { width: 300, margin: 1 },
+);
+
+const fmt = (iso?: string) => (iso ? new Date(iso).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '—');
+const complete = hasSeal && hasHeraldry && hasSignature;
+---
+<Layout title={`Review ${card.companionNumber}`} noindex>
+  <section class="wrap">
+    <p class="note"><a href="/portal/admin/id-cards">← All cards</a></p>
+    <h1>{card.name || card.companionNumber} <span class={`pill ${card.status}`}>{card.status}</span></h1>
+    <p class="note">
+      {card.companionNumber} · applied for <strong>{card.requestedTitle}</strong> · submitted {fmt(card.submittedAt)}
+    </p>
+    {card.statement && <blockquote>{card.statement}</blockquote>}
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+    {message && <p role="status" class="msg ok">{message}</p>}
+    {!complete && <p class="msg bad">Missing images — the Companion has not supplied all of: seal, heraldry, autograph.</p>}
+
+    <h2>Preview</h2>
+    <CompanionCard
+      variant="prototype"
+      name={card.name}
+      companionNumber={card.companionNumber}
+      title={card.title ?? card.requestedTitle}
+      aol={card.aol}
+      sendingState={surnameFrom(card.name, record?.familyName)}
+      photoUrl={record?.photoUrl}
+      qrCodeDataUrl={qr}
+      sealUrl={hasSeal ? img('seal') : null}
+      heraldryUrl={hasHeraldry ? img('heraldry') : null}
+      signatureUrl={hasSignature ? img('signature') : null}
+    />
+
+    <h2>Decision</h2>
+    {card.status !== 'approved' && (
+      <form method="post" class="form">
+        <input type="hidden" name="action" value="approve" />
+        <label>Title<input name="title" required maxlength="60" value={card.title ?? card.requestedTitle} /></label>
+        <label>AOL (apostille number)<input name="aol" required maxlength="60" value={card.aol ?? ''} /></label>
+        <label class="verified">
+          <input type="checkbox" name="verified" value="yes" required />
+          I have verified this Companion's Declaration of Life, including their thumbprint.
+        </label>
+        <button type="submit" class="btn">Approve &amp; grant card</button>
+      </form>
+    )}
+    {card.status === 'approved' && (
+      <p class="note">Approved: {card.title} · AOL {card.aol}. To change either, approve again after revoking.</p>
+    )}
+
+    {(card.status === 'submitted' || card.status === 'rejected') && (
+      <form method="post" class="form inline">
+        <input type="hidden" name="action" value="reject" />
+        <label>Reject with reason<input name="reason" required maxlength="300" placeholder="Shown to the Companion" /></label>
+        <button type="submit" class="btn btn-outline-dark">Reject</button>
+      </form>
+    )}
+    {card.status === 'approved' && (
+      <form method="post" class="form inline">
+        <input type="hidden" name="action" value="revoke" />
+        <label>Revoke with reason<input name="reason" required maxlength="300" /></label>
+        <button type="submit" class="btn btn-outline-dark">Revoke card</button>
+      </form>
+    )}
+
+    <h2>History</h2>
+    <ul class="history">
+      {[...card.history].reverse().map((h) => (
+        <li><span>{fmt(h.at)}</span> <strong>{h.action}</strong> by {h.by}{h.note ? ` — ${h.note}` : ''}</li>
+      ))}
+    </ul>
+    <form method="post" class="form inline">
+      <input type="hidden" name="action" value="note" />
+      <label>Internal note<input name="note" required maxlength="500" /></label>
+      <button type="submit" class="btn btn-outline-dark">Add note</button>
+    </form>
+  </section>
+</Layout>
+
+<style>
+  .wrap { padding: 32px 0; max-width: 820px; }
+  .wrap h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--sf-text); }
+  .wrap h2 { font-size: 1.1rem; margin: 32px 0 12px; color: var(--sf-text); }
+  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
+  blockquote { margin: 0 0 16px; padding: 10px 14px; border-left: 3px solid var(--sf-border-strong); color: var(--sf-text); font-size: 0.9rem; }
+  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
+  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
+  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
+
+  .pill { padding: 2px 10px; border-radius: var(--sf-radius-full); font-size: 0.75rem; text-transform: capitalize; vertical-align: middle; }
+  .pill.submitted { background: rgba(22, 98, 214, 0.12); color: #0f4fb5; }
+  .pill.approved { background: rgba(18, 128, 58, 0.12); color: #0f5f2c; }
+  .pill.rejected, .pill.revoked { background: rgba(185, 28, 28, 0.1); color: #8f1717; }
+
+  .form { display: flex; flex-direction: column; gap: 14px; max-width: 420px; margin-bottom: 20px; }
+  .form.inline { max-width: 560px; }
+  .form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
+  .form input:not([type='checkbox']) { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
+  .form .verified { flex-direction: row; gap: 8px; align-items: flex-start; }
+
+  .history { list-style: none; margin: 0 0 20px; padding: 0; font-size: 0.85rem; color: var(--sf-text); }
+  .history li { padding: 6px 0; border-bottom: 1px solid var(--sf-border); }
+  .history span { color: var(--sf-text-muted); margin-right: 6px; }
+</style>

@@ -1,0 +1,129 @@
+---
+export const prerender = false;
+
+import Layout from '../../../../layouts/Layout.astro';
+import { requireAdmin } from '../../../../lib/admin';
+import { approveCard, listCards, type CardStatus } from '../../../../lib/idcards';
+
+// Admin dashboard for Certificate of the Identity applications. Each row opens
+// the review page; "Grant directly" skips the application for Companions
+// already verified in person.
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+const { profile } = gate;
+
+let message: string | null = null;
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const companionNumber = String(form.get('companionNumber') ?? '').trim();
+  const title = String(form.get('title') ?? '').trim();
+  const aol = String(form.get('aol') ?? '').trim();
+  try {
+    if (!/^[A-Za-z0-9]+$/.test(companionNumber)) throw new Error('Enter a valid Companion Number.');
+    if (!title || title.length > 60) throw new Error('Enter a Title (up to 60 characters).');
+    if (!aol || aol.length > 60) throw new Error('Enter the AOL (apostille) number.');
+    if (form.get('verified') !== 'yes') throw new Error('Confirm the Declaration of Life has been verified.');
+    await approveCard(companionNumber, profile.companion_number!, { title, aol });
+    message = `Card granted to ${companionNumber}.`;
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not save that.';
+  }
+}
+
+const order: CardStatus[] = ['submitted', 'approved', 'rejected', 'revoked'];
+const filter = Astro.url.searchParams.get('status');
+const all = await listCards();
+const counts = Object.fromEntries(order.map((s) => [s, all.filter((c) => c.status === s).length]));
+const cards = all
+  .filter((c) => !filter || c.status === filter)
+  .sort(
+    (a, b) =>
+      order.indexOf(a.status) - order.indexOf(b.status) ||
+      (b.submittedAt ?? '').localeCompare(a.submittedAt ?? ''),
+  );
+
+const fmt = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : '—');
+---
+<Layout title="ID card management" noindex>
+  <section class="wrap">
+    <h1>Certificate of the Identity — management</h1>
+    <p class="note">
+      <a href="/portal">Portal</a> · <a href="/portal/admin/id-prototype">Prototype card</a>
+    </p>
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+    {message && <p role="status" class="msg ok">{message}</p>}
+
+    <nav class="tabs" aria-label="Filter by status">
+      <a href="/portal/admin/id-cards" class={!filter ? 'on' : ''}>All ({all.length})</a>
+      {order.map((s) => (
+        <a href={`?status=${s}`} class={filter === s ? 'on' : ''}>{s} ({counts[s]})</a>
+      ))}
+    </nav>
+
+    {cards.length === 0 ? (
+      <p class="note">Nothing here yet.</p>
+    ) : (
+      <table>
+        <thead>
+          <tr><th>Companion</th><th>Name</th><th>Title</th><th>AOL</th><th>Status</th><th>Submitted</th></tr>
+        </thead>
+        <tbody>
+          {cards.map((c) => (
+            <tr>
+              <td><a href={`/portal/admin/id-cards/${c.companionNumber}`}>{c.companionNumber}</a></td>
+              <td>{c.name || '—'}</td>
+              <td>{c.title ?? c.requestedTitle}</td>
+              <td>{c.aol ?? '—'}</td>
+              <td><span class={`pill ${c.status}`}>{c.status}</span></td>
+              <td>{fmt(c.submittedAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+
+    <h2>Grant directly</h2>
+    <p class="note">For a Companion who has already shown you their Declaration of Life and has no application.</p>
+    <form method="post" class="grant-form">
+      <label>Companion Number<input name="companionNumber" required placeholder="SovfCom00000001" /></label>
+      <label>Title<input name="title" required value="Consul-General" maxlength="60" /></label>
+      <label>AOL (apostille number)<input name="aol" required maxlength="60" /></label>
+      <label class="verified">
+        <input type="checkbox" name="verified" value="yes" required />
+        I have verified this Companion's Declaration of Life, including their thumbprint.
+      </label>
+      <button type="submit" class="btn">Grant card</button>
+    </form>
+  </section>
+</Layout>
+
+<style>
+  .wrap { padding: 32px 0; max-width: 820px; }
+  .wrap h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--sf-text); }
+  .wrap h2 { font-size: 1.1rem; margin: 36px 0 4px; color: var(--sf-text); }
+  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
+  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
+  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
+  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+  .tabs a { padding: 6px 12px; border-radius: var(--sf-radius-full); font-size: 0.8rem; text-transform: capitalize; background: var(--sf-primary-soft); color: var(--sf-ink); text-decoration: none; }
+  .tabs a.on { background: var(--sf-primary); color: #fff; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; color: var(--sf-text); display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sf-border); white-space: nowrap; }
+  th { color: var(--sf-text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .pill { padding: 2px 10px; border-radius: var(--sf-radius-full); font-size: 0.75rem; text-transform: capitalize; }
+  .pill.submitted { background: rgba(22, 98, 214, 0.12); color: #0f4fb5; }
+  .pill.approved { background: rgba(18, 128, 58, 0.12); color: #0f5f2c; }
+  .pill.rejected, .pill.revoked { background: rgba(185, 28, 28, 0.1); color: #8f1717; }
+
+  .grant-form { display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
+  .grant-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
+  .grant-form input:not([type='checkbox']) { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
+  .grant-form .verified { flex-direction: row; gap: 8px; align-items: flex-start; }
+</style>

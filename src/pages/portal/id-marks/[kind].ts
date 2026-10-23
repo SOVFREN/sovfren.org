@@ -1,14 +1,16 @@
 export const prerender = false;
 
-import type { APIRoute } from 'astro';
+import type { APIRoute, AstroGlobal } from 'astro';
 import { fetchUserInfo } from '../../../lib/sso';
 import { getSession } from '../../../lib/session';
+import { isAdminCompanion } from '../../../lib/admin';
 import { MARK_KINDS, readMark, type MarkKind } from '../../../lib/idmarks';
 
-// Serves the signed-in Companion's own autograph or logo image, never anyone else's.
+// Serves the signed-in Companion's own autograph/seal/heraldry image. Admins may
+// also pass ?c=<CompanionNumber> to review an applicant's images.
 export const GET: APIRoute = async (Astro) => {
   const kind = Astro.params.kind as MarkKind;
-  const session = await getSession(Astro);
+  const session = await getSession(Astro as unknown as AstroGlobal);
   if (!session || !MARK_KINDS.includes(kind)) return new Response('Not found', { status: 404 });
 
   let companionNumber: string | undefined;
@@ -17,10 +19,15 @@ export const GET: APIRoute = async (Astro) => {
   } catch {
     return new Response('Not found', { status: 404 });
   }
+  const requested = Astro.url.searchParams.get('c');
+  if (requested && requested !== companionNumber) {
+    if (!isAdminCompanion(companionNumber)) return new Response('Not found', { status: 404 });
+    companionNumber = requested;
+  }
   const mark = companionNumber ? await readMark(companionNumber, kind) : null;
   if (!mark) return new Response('Not found', { status: 404 });
 
-  return new Response(mark.bytes, {
+  return new Response(new Uint8Array(mark.bytes), {
     headers: { 'Content-Type': mark.type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' },
   });
 };

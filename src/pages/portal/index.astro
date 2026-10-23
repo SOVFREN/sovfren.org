@@ -4,13 +4,9 @@ export const prerender = false;
 import QRCode from 'qrcode';
 import Layout from '../../layouts/Layout.astro';
 import CompanionCard from '../../components/CompanionCard.astro';
-import { getGrant, canUseIdCard, surnameFrom } from '../../lib/idcards';
-import {
-  hasMark,
-  saveMark,
-  saveSignatureDataUrl,
-  deleteMark,
-} from '../../lib/idmarks';
+import { getCard, canUseIdCard, surnameFrom } from '../../lib/idcards';
+import { isAdminCompanion } from '../../lib/admin';
+import { hasMark } from '../../lib/idmarks';
 import { fetchUserInfo } from '../../lib/sso';
 import { getSession, clearSession } from '../../lib/session';
 import { getRegisterRecord, uploadRegisterPhoto, type RegisterRecord } from '../../lib/sovfhub';
@@ -29,64 +25,29 @@ try {
 }
 
 let photoError: string | null = null;
-let marksError: string | null = null;
-let marksSaved: string | null = null;
-const grant = await getGrant(profile.companion_number);
-const canAddMarks = await canUseIdCard(profile.companion_number);
-
-class MarksInputError extends Error {}
 
 if (Astro.request.method === 'POST' && profile.companion_number) {
   const form = await Astro.request.formData();
-  const action = String(form.get('action') ?? 'photo');
-  const companionNumber = profile.companion_number;
-
-  if (action === 'photo') {
-    const file = form.get('photo');
-    if (file instanceof File && file.size > 0) {
-      try {
-        await uploadRegisterPhoto(session.accessToken, file);
-      } catch {
-        photoError = 'Could not upload that photo. Please try a JPG, PNG or WEBP under 8MB.';
-      }
-    }
-  } else if (canAddMarks) {
+  const file = form.get('photo');
+  if (file instanceof File && file.size > 0) {
     try {
-      if (action === 'signature' || action === 'logo') {
-        if (form.get('consent') !== 'yes') {
-          throw new MarksInputError('Please confirm your consent first.');
-        }
-        if (action === 'signature') {
-          await saveSignatureDataUrl(companionNumber, String(form.get('signatureData') ?? ''));
-          marksSaved = 'Autograph saved.';
-        } else {
-          const file = form.get('logo');
-          if (!(file instanceof File) || file.size === 0) {
-            throw new MarksInputError('Choose an image of your private mark.');
-          }
-          await saveMark(companionNumber, 'logo', new Uint8Array(await file.arrayBuffer()));
-          marksSaved = 'Private mark saved.';
-        }
-      } else if (action === 'remove-signature') {
-        await deleteMark(companionNumber, 'signature');
-        marksSaved = 'Autograph removed.';
-      } else if (action === 'remove-logo') {
-        await deleteMark(companionNumber, 'logo');
-        marksSaved = 'Private mark removed.';
-      }
-    } catch (e) {
-      marksError =
-        e instanceof MarksInputError
-          ? e.message
-          : 'Could not save that. Please use a PNG, JPG or WEBP image under 4MB.';
+      await uploadRegisterPhoto(session.accessToken, file);
+    } catch {
+      photoError = 'Could not upload that photo. Please try a JPG, PNG or WEBP under 8MB.';
     }
   }
 }
 
-const hasLogo =
-  profile.companion_number && canAddMarks ? await hasMark(profile.companion_number, 'logo') : false;
-const hasSignature =
-  profile.companion_number && canAddMarks ? await hasMark(profile.companion_number, 'signature') : false;
+const idCard = await getCard(profile.companion_number);
+const hasIdCard = await canUseIdCard(profile.companion_number);
+const [hasSeal, hasHeraldry, hasSignature] =
+  profile.companion_number && hasIdCard
+    ? await Promise.all([
+        hasMark(profile.companion_number, 'seal'),
+        hasMark(profile.companion_number, 'heraldry'),
+        hasMark(profile.companion_number, 'signature'),
+      ])
+    : [false, false, false];
 
 let registerRecord: RegisterRecord | null = null;
 if (profile.companion_number) {
@@ -109,13 +70,14 @@ const qrCodeDataUrl = registerUrl
     <h1>Welcome, {profile.name ?? profile.preferred_username}</h1>
 
     <CompanionCard
-      variant={canAddMarks ? 'prototype' : 'standard'}
+      variant={hasIdCard ? 'prototype' : 'standard'}
       sendingState={surnameFrom(profile.name ?? profile.preferred_username ?? '', registerRecord?.familyName)}
-      logoUrl={hasLogo ? '/portal/id-marks/logo' : null}
-      title={grant?.title}
-      aol={grant?.aol}
+      sealUrl={hasSeal ? '/portal/id-marks/seal' : null}
+      heraldryUrl={hasHeraldry ? '/portal/id-marks/heraldry' : null}
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
-      name={profile.name ?? profile.preferred_username}
+      title={idCard?.status === 'approved' ? idCard.title : undefined}
+      aol={idCard?.status === 'approved' ? idCard.aol : undefined}
+      name={profile.name ?? profile.preferred_username ?? ''}
       companionNumber={profile.companion_number}
       status={registerRecord?.status}
       expiryDate={registerRecord?.expiryDate}
@@ -135,56 +97,21 @@ const qrCodeDataUrl = registerUrl
       </div>
     )}
 
-    {canAddMarks && (
-      <div class="photo-upload marks">
-        <h2>Autograph &amp; Private Mark</h2>
-        <p>
-          Available once your Certificate of the Identity has been granted. Your autograph and private
-          mark are stored privately on the Society's server and appear only in their positions on your
-          Certificate of the Identity.
-        </p>
-        {marksError && <p role="alert">{marksError}</p>}
-        {marksSaved && <p role="status">{marksSaved}</p>}
-
-        <h3>Autograph</h3>
-        <form method="post" class="marks-form" data-signature-form>
-          <input type="hidden" name="action" value="signature" />
-          <input type="hidden" name="signatureData" />
-          <canvas class="sig-pad" width="800" height="240" aria-label="Draw your autograph"></canvas>
-          <label class="consent">
-            <input type="checkbox" name="consent" value="yes" required />
-            I consent to the Society storing my autograph and showing it on my card.
-          </label>
-          <div class="marks-actions">
-            <button type="submit" class="btn">{hasSignature ? 'Replace autograph' : 'Save autograph'}</button>
-            <button type="button" class="link-btn" data-sig-clear>Clear</button>
-          </div>
-        </form>
-        {hasSignature && (
-          <form method="post">
-            <input type="hidden" name="action" value="remove-signature" />
-            <button type="submit" class="link-btn">Remove autograph</button>
-          </form>
+    {profile.companion_number && (
+      <div class="photo-upload">
+        <h2>Certificate of the Identity</h2>
+        {!idCard && (
+          <p>Apply for your Certificate of the Identity with your private seal, estate heraldic symbol and autograph.</p>
         )}
-
-        <h3>Private mark</h3>
-        <form method="post" enctype="multipart/form-data" class="marks-form">
-          <input type="hidden" name="action" value="logo" />
-          <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required />
-          <label class="consent">
-            <input type="checkbox" name="consent" value="yes" required />
-            I consent to the Society storing my private mark and showing it on my card.
-          </label>
-          <div class="marks-actions">
-            <button type="submit" class="btn">{hasLogo ? 'Replace private mark' : 'Upload private mark'}</button>
-          </div>
-        </form>
-        {hasLogo && (
-          <form method="post">
-            <input type="hidden" name="action" value="remove-logo" />
-            <button type="submit" class="link-btn">Remove private mark</button>
-          </form>
+        {idCard?.status === 'submitted' && <p>Your application is awaiting review.</p>}
+        {idCard?.status === 'approved' && <p>Granted. You can update your seal, heraldry and autograph.</p>}
+        {idCard?.status === 'rejected' && (
+          <p>Not approved{idCard.rejectionReason ? `: ${idCard.rejectionReason}` : '.'} You can update and apply again.</p>
         )}
+        {idCard?.status === 'revoked' && <p>Your card has been revoked. You can apply again.</p>}
+        <a class="btn" href="/portal/id-application">
+          {!idCard ? 'Start application' : idCard.status === 'approved' ? 'Update my card' : 'View application'}
+        </a>
       </div>
     )}
 
@@ -193,6 +120,9 @@ const qrCodeDataUrl = registerUrl
         <a class="btn" href={`/register/${profile.companion_number}`}>View my Register record</a>
       )}
       <a class="btn btn-outline-dark" href="/portal/notices">My Public Notices</a>
+      {isAdminCompanion(profile.companion_number) && (
+        <a class="btn btn-outline-dark" href="/portal/admin/id-cards">Manage ID cards</a>
+      )}
 
       <form method="post" action="/portal/logout" class="logout-form">
         <button type="submit" class="link-btn">Sign out</button>
@@ -200,57 +130,6 @@ const qrCodeDataUrl = registerUrl
     </div>
   </section>
 </Layout>
-
-<script>
-  const form = document.querySelector<HTMLFormElement>('[data-signature-form]');
-  const canvas = form?.querySelector<HTMLCanvasElement>('.sig-pad');
-  const ctx = canvas?.getContext('2d');
-  if (form && canvas && ctx) {
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#1d3fa0';
-    let drawing = false;
-    let inked = false;
-    const pos = (e: PointerEvent) => {
-      const r = canvas.getBoundingClientRect();
-      return [((e.clientX - r.left) * canvas.width) / r.width, ((e.clientY - r.top) * canvas.height) / r.height];
-    };
-    canvas.addEventListener('pointerdown', (e) => {
-      drawing = true;
-      canvas.setPointerCapture(e.pointerId);
-      const [x, y] = pos(e);
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 0.01, y);
-      ctx.stroke();
-      inked = true;
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      if (!drawing) return;
-      const [x, y] = pos(e);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    });
-    const stop = () => {
-      drawing = false;
-    };
-    canvas.addEventListener('pointerup', stop);
-    canvas.addEventListener('pointercancel', stop);
-    form.querySelector('[data-sig-clear]')?.addEventListener('click', () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      inked = false;
-    });
-    form.addEventListener('submit', (e) => {
-      if (!inked) {
-        e.preventDefault();
-        alert('Please draw your autograph first.');
-        return;
-      }
-      (form.elements.namedItem('signatureData') as HTMLInputElement).value = canvas.toDataURL('image/png');
-    });
-  }
-</script>
 
 <style>
   .wrap {
@@ -294,44 +173,6 @@ const qrCodeDataUrl = registerUrl
   .photo-upload-form input[type='file'] {
     flex: 1 1 200px;
     font-size: 0.85rem;
-  }
-
-  .marks h3 {
-    margin: 20px 0 8px;
-    font-size: 0.9rem;
-    color: var(--sf-text);
-  }
-
-  .marks-form {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 8px;
-  }
-
-  .sig-pad {
-    width: 100%;
-    max-width: 400px;
-    aspect-ratio: 10 / 3;
-    background: #fff;
-    border: 1px dashed var(--sf-border-strong);
-    border-radius: var(--sf-radius-md);
-    touch-action: none;
-    cursor: crosshair;
-  }
-
-  .consent {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-    font-size: 0.8rem;
-    color: var(--sf-text-muted);
-  }
-
-  .marks-actions {
-    display: flex;
-    gap: 16px;
-    align-items: center;
   }
 
   .actions {

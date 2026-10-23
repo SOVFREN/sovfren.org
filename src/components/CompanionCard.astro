@@ -15,7 +15,8 @@ interface Props {
   expiryDate?: string | null;
   photoUrl?: string | null;
   qrCodeDataUrl?: string | null;
-  logoUrl?: string | null;
+  sealUrl?: string | null;
+  heraldryUrl?: string | null;
   signatureUrl?: string | null;
 }
 
@@ -30,7 +31,8 @@ const {
   expiryDate,
   photoUrl,
   qrCodeDataUrl,
-  logoUrl,
+  sealUrl,
+  heraldryUrl,
   signatureUrl,
 } = Astro.props;
 
@@ -92,7 +94,7 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
         </svg>
       )}
       {proto ? (
-        logoUrl && <img class="px seal" src={logoUrl} alt="Private mark" />
+        sealUrl && <img class="px seal" src={sealUrl} alt="Private seal" />
       ) : (
         <img class="px seal" src="/images/crest.png" alt="" />
       )}
@@ -121,7 +123,7 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
             under Diplomatic Privileges (UPU Order).
           </p>
           <img class="px un" src="/images/prototype/un.png" alt="" />
-          <img class="px arms" src="/images/prototype/arms.png" alt="" />
+          {heraldryUrl && <img class="px arms" src={heraldryUrl} alt="Private estate heraldry" />}
           <img class="px ems" src="/images/prototype/ems.png" alt="" />
           <img class="px stripes" src="/images/prototype/ems-stripes.png" alt="" />
           <div class="px care">Aux soins du Consul d'<br />{sendingState}</div>
@@ -220,7 +222,7 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
   .b-head { left: 0; right: 0; top: 8.1%; text-align: center; font-size: 2.95cqw; }
   .b-text { left: 4.04%; top: 15.4%; width: 92.13%; height: 47.96%; margin: 0; box-sizing: border-box; padding: 0.8cqw 0.9cqw; background: #fff; color: #111; font-size: 2.0cqw; line-height: 1.42; }
   .un { left: 3.74%; top: 70.2%; width: 15.45%; height: 24.6%; }
-  .arms { left: 22.15%; top: 68.2%; width: 14.76%; height: 25.9%; }
+  .arms { object-fit: contain; left: 22.15%; top: 68.2%; width: 14.76%; height: 25.9%; }
   .ems { left: 37.9%; top: 78.4%; width: 37.5%; height: 16%; }
   .stripes { left: 75.6%; top: 79.2%; width: 19.1%; height: 6.7%; }
   .care { left: 75.4%; top: 87.2%; font-size: 1.97cqw; line-height: 1.15; }

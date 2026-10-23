@@ -38,7 +38,8 @@ try {
 }
 
 const grant = await getGrant(profile.companion_number);
-const hasLogo = await hasMark(profile.companion_number!, 'logo');
+const hasSeal = await hasMark(profile.companion_number!, 'seal');
+const hasHeraldry = await hasMark(profile.companion_number!, 'heraldry');
 const hasSignature = await hasMark(profile.companion_number!, 'signature');
 
 const qr = await QRCode.toDataURL(
@@ -49,7 +50,7 @@ const qr = await QRCode.toDataURL(
 <Layout title="Certificate of Identity Prototype" noindex>
   <section class="wrap">
     <h1>Certificate of the Identity — design prototype</h1>
-    <p class="note">Design mock-up for review. Not an issued credential. Click the card to flip it. <a href="/portal/admin/id-cards">Manage card grants</a></p>
+    <p class="note">Design mock-up for review. Not an issued credential. Click the card to flip it. <a href="/portal/admin/id-cards">Manage ID cards</a> · <a href="/portal/id-application">Update my seal &amp; heraldry</a></p>
     <CompanionCard
       variant="prototype"
       name={profile.name ?? profile.preferred_username ?? ''}
@@ -59,7 +60,8 @@ const qr = await QRCode.toDataURL(
       sendingState={surnameFrom(profile.name ?? profile.preferred_username ?? '', record?.familyName)}
       photoUrl={record?.photoUrl}
       qrCodeDataUrl={qr}
-      logoUrl={hasLogo ? '/portal/id-marks/logo' : null}
+      sealUrl={hasSeal ? '/portal/id-marks/seal' : null}
+      heraldryUrl={hasHeraldry ? '/portal/id-marks/heraldry' : null}
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
     />
   </section>

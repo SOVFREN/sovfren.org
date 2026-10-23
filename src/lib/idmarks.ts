@@ -1,12 +1,13 @@
-// Autograph and private-mark logo images for the Certificate of the Identity card.
+// Autograph, private seal and estate heraldry images for the Certificate of the Identity card.
 // Stored on this server (not SovfHub), one folder per Companion Number, and
-// only ever served back to that signed-in Companion by portal/id-marks/[kind].
+// only ever served back to that signed-in Companion (or an admin reviewing their
+// application) by portal/id-marks/[kind].
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export type MarkKind = 'logo' | 'signature';
-export const MARK_KINDS: MarkKind[] = ['logo', 'signature'];
+export type MarkKind = 'seal' | 'heraldry' | 'signature';
+export const MARK_KINDS: MarkKind[] = ['seal', 'heraldry', 'signature'];
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
