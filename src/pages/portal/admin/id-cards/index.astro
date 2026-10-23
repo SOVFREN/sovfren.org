@@ -3,7 +3,7 @@ export const prerender = false;
 
 import Layout from '../../../../layouts/Layout.astro';
 import { requireAdmin } from '../../../../lib/admin';
-import { approveCard, listCards, type CardStatus } from '../../../../lib/idcards';
+import { approveCard, listCards, normalisePostRef, type CardStatus } from '../../../../lib/idcards';
 
 // Admin dashboard for Certificate of the Identity applications. Each row opens
 // the review page; "Grant directly" skips the application for Companions
@@ -25,7 +25,9 @@ if (Astro.request.method === 'POST') {
     if (!title || title.length > 60) throw new Error('Enter a Title (up to 60 characters).');
     if (!aol || aol.length > 60) throw new Error('Enter the AOL (apostille) number.');
     if (form.get('verified') !== 'yes') throw new Error('Confirm the Declaration of Life has been verified.');
-    await approveCard(companionNumber, profile.companion_number!, { title, aol });
+    const postRef = normalisePostRef(String(form.get('postRef') ?? ''));
+    if (!postRef) throw new Error('Enter a valid Registered Post reference (e.g. NZ141668707GB).');
+    await approveCard(companionNumber, profile.companion_number!, { title, aol, postRef });
     message = `Card granted to ${companionNumber}.`;
   } catch (e) {
     error = e instanceof Error ? e.message : 'Could not save that.';
@@ -91,6 +93,7 @@ const fmt = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : 
       <label>Companion Number<input name="companionNumber" required placeholder="SovfCom00000001" /></label>
       <label>Title<input name="title" required value="Consul-General" maxlength="60" /></label>
       <label>AOL (apostille number)<input name="aol" required maxlength="60" /></label>
+      <label>Registered Post reference<input name="postRef" required maxlength="20" placeholder="NZ 1416 6870 7GB" /></label>
       <label class="verified">
         <input type="checkbox" name="verified" value="yes" required />
         I have verified this Companion's Declaration of Life, including their thumbprint.

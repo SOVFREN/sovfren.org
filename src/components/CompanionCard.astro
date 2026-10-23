@@ -12,6 +12,7 @@ interface Props {
   title?: string | null;
   sendingState?: string | null;
   aol?: string | null;
+  postRef?: string | null;
   expiryDate?: string | null;
   photoUrl?: string | null;
   qrCodeDataUrl?: string | null;
@@ -28,6 +29,7 @@ const {
   title,
   sendingState,
   aol,
+  postRef,
   expiryDate,
   photoUrl,
   qrCodeDataUrl,
@@ -37,7 +39,10 @@ const {
 } = Astro.props;
 
 const proto = variant === 'prototype';
-const barcode = companionNumber ? code128B(companionNumber) : null;
+// Prototype card: the barcode carries the Registered Post reference of the
+// posted Declaration of Life. Standard card: the Companion Number.
+const barcodeText = proto ? postRef : companionNumber;
+const barcode = barcodeText ? code128B(barcodeText) : null;
 ---
 <div class="flip" data-flip>
   <div class="flip-inner">
@@ -88,11 +93,12 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
           class="px barcode wide"
           viewBox={`0 0 ${barcode.width} 40`}
           preserveAspectRatio="none"
-          aria-label={`Barcode for ${companionNumber}`}
+          aria-label={`Barcode for ${barcodeText}`}
         >
           {barcode.bars.map((b) => <rect x={b.x} y="0" width={b.width} height="40" />)}
         </svg>
       )}
+      {barcode && <div class="px barcode-text">{barcodeText}</div>}
       {proto ? (
         sealUrl && <img class="px seal" src={sealUrl} alt="Private seal" />
       ) : (
@@ -214,8 +220,9 @@ const barcode = companionNumber ? code128B(companionNumber) : null;
   .sig { left: 28.54%; top: 63.95%; width: 40.85%; height: 12.85%; display: flex; align-items: center; color: #1d3fa0; font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 3.2cqw; background: #f3f6fa; white-space: nowrap; overflow: hidden; }
   .sig img { width: 100%; height: 100%; object-fit: contain; }
   .sig.wide { left: 21.5%; width: 47.9%; }
-  .barcode { left: 22.14%; top: 77.9%; width: 46.26%; height: 10.19%; fill: #111; }
+  .barcode { left: 22.14%; top: 77.9%; width: 46.26%; height: 8%; fill: #111; }
   .barcode.wide { left: 21.5%; width: 47.9%; }
+  .barcode-text { left: 21.5%; top: 86.2%; width: 47.9%; text-align: center; color: #111; font-size: 1.5cqw; letter-spacing: 0.12em; font-family: 'Courier New', monospace; }
   .seal { left: 74.31%; top: 60.34%; width: 20.67%; height: 29.78%; object-fit: contain; }
   .foot { left: 0; right: 0; top: 90.6%; text-align: center; font-size: 1.8cqw; }
 

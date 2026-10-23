@@ -7,7 +7,14 @@ import CompanionCard from '../../components/CompanionCard.astro';
 import { fetchUserInfo } from '../../lib/sso';
 import { getSession, clearSession } from '../../lib/session';
 import { getRegisterRecord, type RegisterRecord } from '../../lib/sovfhub';
-import { getCard, submitApplication, noteMarksUpdated, surnameFrom } from '../../lib/idcards';
+import {
+  getCard,
+  submitApplication,
+  noteMarksUpdated,
+  setPostRef,
+  normalisePostRef,
+  surnameFrom,
+} from '../../lib/idcards';
 import { hasMark, saveMark, saveSignatureDataUrl } from '../../lib/idmarks';
 
 // Companion-facing application for the Certificate of the Identity: private
@@ -58,6 +65,13 @@ if (Astro.request.method === 'POST') {
     }
     if (statement.length > 1000) throw new InputError('Keep your statement under 1000 characters.');
 
+    const postRef = normalisePostRef(String(form.get('postRef') ?? ''));
+    if (!postRef) {
+      throw new InputError(
+        'Enter the Registered Post reference number from your Declaration of Life receipt, e.g. NZ 1416 6870 7GB.',
+      );
+    }
+
     const seal = await readImage(form, 'seal');
     const heraldry = await readImage(form, 'heraldry');
     const signatureData = String(form.get('signatureData') ?? '');
@@ -73,9 +87,10 @@ if (Astro.request.method === 'POST') {
         !(await hasMark(companionNumber, 'signature')) && 'autograph',
       ].filter(Boolean);
       if (missing.length) throw new InputError(`Please provide your ${missing.join(', ')}.`);
-      await submitApplication(companionNumber, displayName, { requestedTitle, statement });
+      await submitApplication(companionNumber, displayName, { requestedTitle, statement, postRef });
       saved = 'Application submitted. You will see the decision here.';
     } else {
+      if (card?.postRef !== postRef) await setPostRef(companionNumber, companionNumber, postRef);
       await noteMarksUpdated(companionNumber);
       saved = 'Your card has been updated.';
     }
@@ -156,6 +171,22 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
           </>
         )}
 
+        <label>
+          Registered Post reference number
+          <input
+            name="postRef"
+            required
+            maxlength="20"
+            value={card?.postRef ?? ''}
+            placeholder="e.g. NZ 1416 6870 7GB"
+            autocomplete="off"
+          />
+          <small>
+            The reference from the Registered Post receipt for your Declaration of Life. It is
+            printed as the barcode on the front of your card. Two letters, nine digits, then "GB".
+          </small>
+        </label>
+
         <fieldset>
           <legend>Private seal <small>— front of card</small></legend>
           {hasSeal && <img class="thumb" src="/portal/id-marks/seal" alt="Current private seal" />}
@@ -195,6 +226,7 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
           companionNumber={companionNumber}
           title={card?.title ?? card?.requestedTitle}
           aol={card?.aol}
+          postRef={card?.postRef}
           sendingState={surnameFrom(displayName, record?.familyName)}
           photoUrl={record?.photoUrl}
           qrCodeDataUrl={qrCodeDataUrl}
@@ -281,6 +313,7 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
   fieldset { border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
   legend { font-size: 0.9rem; font-weight: 600; color: var(--sf-text); padding: 0 6px; }
   legend small { font-weight: 400; color: var(--sf-text-muted); }
+  .form small { font-size: 0.75rem; color: var(--sf-text-muted); }
   .thumb { max-width: 120px; max-height: 120px; object-fit: contain; background: #fff; border: 1px solid var(--sf-border); border-radius: 8px; padding: 4px; }
   .sig-thumb { max-width: 220px; max-height: 70px; }
   .sig-pad { width: 100%; max-width: 400px; aspect-ratio: 10 / 3; background: #fff; border: 1px dashed var(--sf-border-strong); border-radius: var(--sf-radius-md); touch-action: none; cursor: crosshair; }

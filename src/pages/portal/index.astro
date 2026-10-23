@@ -77,6 +77,7 @@ const qrCodeDataUrl = registerUrl
       signatureUrl={hasSignature ? '/portal/id-marks/signature' : null}
       title={idCard?.status === 'approved' ? idCard.title : undefined}
       aol={idCard?.status === 'approved' ? idCard.aol : undefined}
+      postRef={idCard?.status === 'approved' ? idCard.postRef : undefined}
       name={profile.name ?? profile.preferred_username ?? ''}
       companionNumber={profile.companion_number}
       status={registerRecord?.status}

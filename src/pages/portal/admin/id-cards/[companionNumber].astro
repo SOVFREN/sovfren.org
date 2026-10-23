@@ -11,6 +11,8 @@ import {
   addNote,
   approveCard,
   getCard,
+  normalisePostRef,
+  postRefCheckDigitValid,
   rejectCard,
   revokeCard,
   surnameFrom,
@@ -37,7 +39,9 @@ if (Astro.request.method === 'POST') {
       if (!text('title') || text('title').length > 60) throw new Error('Enter a Title (up to 60 characters).');
       if (!text('aol') || text('aol').length > 60) throw new Error('Enter the AOL (apostille) number.');
       if (form.get('verified') !== 'yes') throw new Error('Confirm the Declaration of Life has been verified.');
-      await approveCard(card.companionNumber, adminNumber, { title: text('title'), aol: text('aol') });
+      const postRef = normalisePostRef(text('postRef'));
+      if (!postRef) throw new Error('Enter a valid Registered Post reference (e.g. NZ141668707GB).');
+      await approveCard(card.companionNumber, adminNumber, { title: text('title'), aol: text('aol'), postRef });
       message = 'Card approved.';
     } else if (action === 'reject') {
       if (!text('reason')) throw new Error('Give a reason so the Companion knows what to fix.');
@@ -78,6 +82,7 @@ const qr = await QRCode.toDataURL(
 
 const fmt = (iso?: string) => (iso ? new Date(iso).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '—');
 const complete = hasSeal && hasHeraldry && hasSignature;
+const checkOk = card.postRef ? postRefCheckDigitValid(card.postRef) : null;
 ---
 <Layout title={`Review ${card.companionNumber}`} noindex>
   <section class="wrap">
@@ -85,6 +90,11 @@ const complete = hasSeal && hasHeraldry && hasSignature;
     <h1>{card.name || card.companionNumber} <span class={`pill ${card.status}`}>{card.status}</span></h1>
     <p class="note">
       {card.companionNumber} · applied for <strong>{card.requestedTitle}</strong> · submitted {fmt(card.submittedAt)}
+    </p>
+    <p class="note">
+      Registered Post reference: <strong>{card.postRef ?? '—'}</strong>
+      {checkOk === true && ' · check digit valid'}
+      {checkOk === false && ' · check digit does NOT match — verify against the receipt'}
     </p>
     {card.statement && <blockquote>{card.statement}</blockquote>}
 
@@ -99,6 +109,7 @@ const complete = hasSeal && hasHeraldry && hasSignature;
       companionNumber={card.companionNumber}
       title={card.title ?? card.requestedTitle}
       aol={card.aol}
+      postRef={card.postRef}
       sendingState={surnameFrom(card.name, record?.familyName)}
       photoUrl={record?.photoUrl}
       qrCodeDataUrl={qr}
@@ -113,6 +124,7 @@ const complete = hasSeal && hasHeraldry && hasSignature;
         <input type="hidden" name="action" value="approve" />
         <label>Title<input name="title" required maxlength="60" value={card.title ?? card.requestedTitle} /></label>
         <label>AOL (apostille number)<input name="aol" required maxlength="60" value={card.aol ?? ''} /></label>
+        <label>Registered Post reference<input name="postRef" required maxlength="20" value={card.postRef ?? ''} /></label>
         <label class="verified">
           <input type="checkbox" name="verified" value="yes" required />
           I have verified this Companion's Declaration of Life, including their thumbprint.

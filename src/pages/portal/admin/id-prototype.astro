@@ -57,6 +57,7 @@ const qr = await QRCode.toDataURL(
       companionNumber={profile.companion_number}
       title={grant?.title ?? record?.credentials}
       aol={grant?.aol}
+      postRef={grant?.postRef}
       sendingState={surnameFrom(profile.name ?? profile.preferred_username ?? '', record?.familyName)}
       photoUrl={record?.photoUrl}
       qrCodeDataUrl={qr}

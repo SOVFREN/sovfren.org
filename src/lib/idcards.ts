@@ -26,6 +26,7 @@ export interface CardRecord {
   statement: string;
   title?: string; // set on approval
   aol?: string; // apostille number, set on approval
+  postRef?: string; // Registered Post reference of the posted Declaration of Life (barcode)
   submittedAt?: string;
   decidedAt?: string;
   rejectionReason?: string;
@@ -77,9 +78,27 @@ export async function canUseIdCard(companionNumber?: string | null): Promise<boo
   return isAdminCompanion(companionNumber) || (await getGrant(companionNumber)) !== null;
 }
 
+// Registered Post reference numbers follow the UPU S10 format: two letters,
+// eight digits, a check digit, then a two-letter country code (e.g. NZ141668707GB).
+export function normalisePostRef(input: string): string | null {
+  const ref = input.replace(/[\s-]/g, '').toUpperCase();
+  return /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(ref) ? ref : null;
+}
+
+// S10 check digit: weighted sum of the eight serial digits (weights 8,6,4,2,3,5,9,7).
+// Informational only — the reviewer sees whether it matches.
+export function postRefCheckDigitValid(ref: string): boolean {
+  const digits = ref.slice(2, 11).split('').map(Number);
+  const weights = [8, 6, 4, 2, 3, 5, 9, 7];
+  const sum = weights.reduce((acc, w, i) => acc + w * digits[i], 0);
+  const check = 11 - (sum % 11);
+  return (check === 10 ? 0 : check === 11 ? 5 : check) === digits[8];
+}
+
 export interface ApplicationInput {
   requestedTitle: string;
   statement: string;
+  postRef: string;
 }
 
 // Companion submits (or resubmits after a rejection/revocation). Approved cards
@@ -105,11 +124,20 @@ export async function submitApplication(
   card.status = 'submitted';
   card.requestedTitle = input.requestedTitle;
   card.statement = input.statement;
+  card.postRef = input.postRef;
   card.submittedAt = new Date().toISOString();
   delete card.rejectionReason;
   log(card, companionNumber, existing ? 'resubmitted' : 'submitted');
   await write(card);
   return card;
+}
+
+export async function setPostRef(companionNumber: string, by: string, postRef: string): Promise<void> {
+  const card = await getCard(companionNumber);
+  if (!card) throw new Error('No such card');
+  card.postRef = postRef;
+  log(card, by, 'post reference changed', postRef);
+  await write(card);
 }
 
 export async function noteMarksUpdated(companionNumber: string): Promise<void> {
@@ -122,7 +150,7 @@ export async function noteMarksUpdated(companionNumber: string): Promise<void> {
 export async function approveCard(
   companionNumber: string,
   by: string,
-  input: { title: string; aol: string; name?: string },
+  input: { title: string; aol: string; postRef?: string; name?: string },
 ): Promise<void> {
   const card: CardRecord = (await getCard(companionNumber)) ?? {
     companionNumber,
@@ -135,6 +163,7 @@ export async function approveCard(
   card.status = 'approved';
   card.title = input.title;
   card.aol = input.aol;
+  if (input.postRef) card.postRef = input.postRef;
   card.decidedAt = new Date().toISOString();
   delete card.rejectionReason;
   log(card, by, 'approved', `${input.title} · AOL ${input.aol}`);
