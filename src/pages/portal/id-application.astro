@@ -77,11 +77,17 @@ if (Astro.request.method === 'POST') {
     const declarationName =
       declaration && declarationFile instanceof File ? declarationFile.name.slice(0, 120) : undefined;
 
+    const affidavit = await readImage(form, 'affidavit');
+    const affidavitFile = form.get('affidavit');
+    const affidavitName =
+      affidavit && affidavitFile instanceof File ? affidavitFile.name.slice(0, 120) : undefined;
+
     const seal = await readImage(form, 'seal');
     const heraldry = await readImage(form, 'heraldry');
     const signatureData = String(form.get('signatureData') ?? '');
 
     if (declaration) await saveMark(companionNumber, 'declaration', declaration);
+    if (affidavit) await saveMark(companionNumber, 'affidavit', affidavit);
     if (seal) await saveMark(companionNumber, 'seal', seal);
     if (heraldry) await saveMark(companionNumber, 'heraldry', heraldry);
     if (signatureData) await saveSignatureDataUrl(companionNumber, signatureData);
@@ -89,16 +95,17 @@ if (Astro.request.method === 'POST') {
     if (!approved) {
       const missing = [
         !(await hasMark(companionNumber, 'declaration')) && 'Declaration of Life, Jurisdiction and Private Commerce',
+        !(await hasMark(companionNumber, 'affidavit')) && 'Affidavit of Status',
         !(await hasMark(companionNumber, 'seal')) && 'private seal',
         !(await hasMark(companionNumber, 'heraldry')) && 'estate heraldic symbol',
         !(await hasMark(companionNumber, 'signature')) && 'autograph',
       ].filter(Boolean);
       if (missing.length) throw new InputError(`Please provide your ${missing.join(', ')}.`);
-      await submitApplication(companionNumber, displayName, { requestedTitle, statement, postRef, declarationName });
+      await submitApplication(companionNumber, displayName, { requestedTitle, statement, postRef, declarationName, affidavitName });
       saved = 'Application submitted. You will see the decision here.';
     } else {
       if (card?.postRef !== postRef) await setPostRef(companionNumber, companionNumber, postRef);
-      await noteMarksUpdated(companionNumber, declarationName);
+      await noteMarksUpdated(companionNumber, declarationName, affidavitName);
       saved = 'Your card has been updated.';
     }
     card = await getCard(companionNumber);
@@ -110,11 +117,12 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [hasSeal, hasHeraldry, hasSignature, hasDeclaration] = await Promise.all([
+const [hasSeal, hasHeraldry, hasSignature, hasDeclaration, hasAffidavit] = await Promise.all([
   hasMark(companionNumber, 'seal'),
   hasMark(companionNumber, 'heraldry'),
   hasMark(companionNumber, 'signature'),
   hasMark(companionNumber, 'declaration'),
+  hasMark(companionNumber, 'affidavit'),
 ]);
 
 let record: RegisterRecord | null = null;
@@ -206,6 +214,18 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
             <p class="hint ok">Uploaded{card?.declarationName ? `: ${card.declarationName}` : ''}. Choose a file only to replace it.</p>
           )}
           <input type="file" name="declaration" accept="application/pdf,image/png,image/jpeg,image/webp" required={!hasDeclaration} />
+        </fieldset>
+
+        <fieldset>
+          <legend>Affidavit of Status <small>— evidence of your status</small></legend>
+          <p class="hint">
+            Upload your signed Affidavit of Status as evidence supporting your application. It is
+            stored privately and only you and the reviewer can open it. PDF, PNG, JPG or WEBP, up to 15MB.
+          </p>
+          {hasAffidavit && (
+            <p class="hint ok">Uploaded{card?.affidavitName ? `: ${card.affidavitName}` : ''}. Choose a file only to replace it.</p>
+          )}
+          <input type="file" name="affidavit" accept="application/pdf,image/png,image/jpeg,image/webp" required={!hasAffidavit} />
         </fieldset>
 
         <fieldset>

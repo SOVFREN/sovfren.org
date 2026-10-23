@@ -4,7 +4,7 @@ import type { APIRoute, AstroGlobal } from 'astro';
 import { fetchUserInfo } from '../../../lib/sso';
 import { getSession } from '../../../lib/session';
 import { isAdminCompanion } from '../../../lib/admin';
-import { MARK_KINDS, readMark, type MarkKind } from '../../../lib/idmarks';
+import { DOCUMENT_KINDS, MARK_KINDS, readMark, type MarkKind } from '../../../lib/idmarks';
 
 // Serves the signed-in Companion's own autograph/seal/heraldry image. Admins may
 // also pass ?c=<CompanionNumber> to review an applicant's images.
@@ -32,10 +32,10 @@ export const GET: APIRoute = async (Astro) => {
     'Cache-Control': 'private, no-store',
     'X-Content-Type-Options': 'nosniff',
   };
-  // The declaration is a user-supplied document: always download it, never render it in-page.
-  if (kind === 'declaration') {
+  // Documents are user-supplied: always download them, never render them in-page.
+  if (DOCUMENT_KINDS.includes(kind)) {
     const ext = mark.type === 'application/pdf' ? 'pdf' : mark.type.split('/')[1];
-    headers['Content-Disposition'] = `attachment; filename="declaration-${companionNumber}.${ext}"`;
+    headers['Content-Disposition'] = `attachment; filename="${kind}-${companionNumber}.${ext}"`;
   }
   return new Response(new Uint8Array(mark.bytes), { headers });
 };
