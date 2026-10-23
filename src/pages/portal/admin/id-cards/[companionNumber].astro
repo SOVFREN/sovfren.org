@@ -62,10 +62,11 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [hasSeal, hasHeraldry, hasSignature] = await Promise.all([
+const [hasSeal, hasHeraldry, hasSignature, hasDeclaration] = await Promise.all([
   hasMark(card.companionNumber, 'seal'),
   hasMark(card.companionNumber, 'heraldry'),
   hasMark(card.companionNumber, 'signature'),
+  hasMark(card.companionNumber, 'declaration'),
 ]);
 const img = (kind: string) => `/portal/id-marks/${kind}?c=${card!.companionNumber}`;
 
@@ -81,7 +82,7 @@ const qr = await QRCode.toDataURL(
 );
 
 const fmt = (iso?: string) => (iso ? new Date(iso).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '—');
-const complete = hasSeal && hasHeraldry && hasSignature;
+const complete = hasSeal && hasHeraldry && hasSignature && hasDeclaration;
 const checkOk = card.postRef ? postRefCheckDigitValid(card.postRef) : null;
 ---
 <Layout title={`Review ${card.companionNumber}`} noindex>
@@ -96,11 +97,19 @@ const checkOk = card.postRef ? postRefCheckDigitValid(card.postRef) : null;
       {checkOk === true && ' · check digit valid'}
       {checkOk === false && ' · check digit does NOT match — verify against the receipt'}
     </p>
+    <p class="note">
+      Declaration of Life, Jurisdiction and Private Commerce:
+      {hasDeclaration ? (
+        <a href={img('declaration')}>Download{card.declarationName ? ` — ${card.declarationName}` : ''}</a>
+      ) : (
+        <strong>not uploaded</strong>
+      )}
+    </p>
     {card.statement && <blockquote>{card.statement}</blockquote>}
 
     {error && <p role="alert" class="msg bad">{error}</p>}
     {message && <p role="status" class="msg ok">{message}</p>}
-    {!complete && <p class="msg bad">Missing images — the Companion has not supplied all of: seal, heraldry, autograph.</p>}
+    {!complete && <p class="msg bad">Incomplete — the Companion has not supplied all of: declaration, seal, heraldry, autograph.</p>}
 
     <h2>Preview</h2>
     <CompanionCard

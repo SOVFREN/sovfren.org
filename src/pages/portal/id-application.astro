@@ -72,26 +72,33 @@ if (Astro.request.method === 'POST') {
       );
     }
 
+    const declaration = await readImage(form, 'declaration');
+    const declarationFile = form.get('declaration');
+    const declarationName =
+      declaration && declarationFile instanceof File ? declarationFile.name.slice(0, 120) : undefined;
+
     const seal = await readImage(form, 'seal');
     const heraldry = await readImage(form, 'heraldry');
     const signatureData = String(form.get('signatureData') ?? '');
 
+    if (declaration) await saveMark(companionNumber, 'declaration', declaration);
     if (seal) await saveMark(companionNumber, 'seal', seal);
     if (heraldry) await saveMark(companionNumber, 'heraldry', heraldry);
     if (signatureData) await saveSignatureDataUrl(companionNumber, signatureData);
 
     if (!approved) {
       const missing = [
+        !(await hasMark(companionNumber, 'declaration')) && 'Declaration of Life, Jurisdiction and Private Commerce',
         !(await hasMark(companionNumber, 'seal')) && 'private seal',
         !(await hasMark(companionNumber, 'heraldry')) && 'estate heraldic symbol',
         !(await hasMark(companionNumber, 'signature')) && 'autograph',
       ].filter(Boolean);
       if (missing.length) throw new InputError(`Please provide your ${missing.join(', ')}.`);
-      await submitApplication(companionNumber, displayName, { requestedTitle, statement, postRef });
+      await submitApplication(companionNumber, displayName, { requestedTitle, statement, postRef, declarationName });
       saved = 'Application submitted. You will see the decision here.';
     } else {
       if (card?.postRef !== postRef) await setPostRef(companionNumber, companionNumber, postRef);
-      await noteMarksUpdated(companionNumber);
+      await noteMarksUpdated(companionNumber, declarationName);
       saved = 'Your card has been updated.';
     }
     card = await getCard(companionNumber);
@@ -99,14 +106,15 @@ if (Astro.request.method === 'POST') {
     error =
       e instanceof InputError
         ? e.message
-        : 'Could not save that. Please use PNG, JPG or WEBP images under 4MB.';
+        : 'Could not save that. Please use PDF, PNG, JPG or WEBP files (documents up to 15MB, images up to 4MB).';
   }
 }
 
-const [hasSeal, hasHeraldry, hasSignature] = await Promise.all([
+const [hasSeal, hasHeraldry, hasSignature, hasDeclaration] = await Promise.all([
   hasMark(companionNumber, 'seal'),
   hasMark(companionNumber, 'heraldry'),
   hasMark(companionNumber, 'signature'),
+  hasMark(companionNumber, 'declaration'),
 ]);
 
 let record: RegisterRecord | null = null;
@@ -186,6 +194,19 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
             printed as the barcode on the front of your card. Two letters, nine digits, then "GB".
           </small>
         </label>
+
+        <fieldset>
+          <legend>Declaration of Life, Jurisdiction and Private Commerce <small>— your signed document</small></legend>
+          <p class="hint">
+            Upload a clear scan or photo of your signed Declaration of Life, Jurisdiction and Private
+            Commerce, including your thumbprint. Your reviewer uses it to confirm your details. It is
+            stored privately and only you and the reviewer can open it. PDF, PNG, JPG or WEBP, up to 15MB.
+          </p>
+          {hasDeclaration && (
+            <p class="hint ok">Uploaded{card?.declarationName ? `: ${card.declarationName}` : ''}. Choose a file only to replace it.</p>
+          )}
+          <input type="file" name="declaration" accept="application/pdf,image/png,image/jpeg,image/webp" required={!hasDeclaration} />
+        </fieldset>
 
         <fieldset>
           <legend>Private seal <small>— front of card</small></legend>
@@ -313,6 +334,8 @@ const hasAnyMark = hasSeal || hasHeraldry || hasSignature;
   fieldset { border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
   legend { font-size: 0.9rem; font-weight: 600; color: var(--sf-text); padding: 0 6px; }
   legend small { font-weight: 400; color: var(--sf-text-muted); }
+  .hint { margin: 0; font-size: 0.8rem; color: var(--sf-text-muted); }
+  .hint.ok { color: #0f5f2c; }
   .form small { font-size: 0.75rem; color: var(--sf-text-muted); }
   .thumb { max-width: 120px; max-height: 120px; object-fit: contain; background: #fff; border: 1px solid var(--sf-border); border-radius: 8px; padding: 4px; }
   .sig-thumb { max-width: 220px; max-height: 70px; }

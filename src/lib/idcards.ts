@@ -27,6 +27,8 @@ export interface CardRecord {
   title?: string; // set on approval
   aol?: string; // apostille number, set on approval
   postRef?: string; // Registered Post reference of the posted Declaration of Life (barcode)
+  declarationName?: string; // original filename of the uploaded Declaration of Life, Jurisdiction and Private Commerce
+  declarationAt?: string;
   submittedAt?: string;
   decidedAt?: string;
   rejectionReason?: string;
@@ -99,6 +101,7 @@ export interface ApplicationInput {
   requestedTitle: string;
   statement: string;
   postRef: string;
+  declarationName?: string; // set when a new document was uploaded with this submission
 }
 
 // Companion submits (or resubmits after a rejection/revocation). Approved cards
@@ -125,6 +128,10 @@ export async function submitApplication(
   card.requestedTitle = input.requestedTitle;
   card.statement = input.statement;
   card.postRef = input.postRef;
+  if (input.declarationName) {
+    card.declarationName = input.declarationName;
+    card.declarationAt = new Date().toISOString();
+  }
   card.submittedAt = new Date().toISOString();
   delete card.rejectionReason;
   log(card, companionNumber, existing ? 'resubmitted' : 'submitted');
@@ -140,9 +147,14 @@ export async function setPostRef(companionNumber: string, by: string, postRef: s
   await write(card);
 }
 
-export async function noteMarksUpdated(companionNumber: string): Promise<void> {
+export async function noteMarksUpdated(companionNumber: string, declarationName?: string): Promise<void> {
   const card = await getCard(companionNumber);
   if (!card) return;
+  if (declarationName) {
+    card.declarationName = declarationName;
+    card.declarationAt = new Date().toISOString();
+    log(card, companionNumber, 'declaration replaced', declarationName);
+  }
   log(card, companionNumber, 'marks updated');
   await write(card);
 }

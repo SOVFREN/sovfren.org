@@ -27,7 +27,15 @@ export const GET: APIRoute = async (Astro) => {
   const mark = companionNumber ? await readMark(companionNumber, kind) : null;
   if (!mark) return new Response('Not found', { status: 404 });
 
-  return new Response(new Uint8Array(mark.bytes), {
-    headers: { 'Content-Type': mark.type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' },
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': mark.type,
+    'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff',
+  };
+  // The declaration is a user-supplied document: always download it, never render it in-page.
+  if (kind === 'declaration') {
+    const ext = mark.type === 'application/pdf' ? 'pdf' : mark.type.split('/')[1];
+    headers['Content-Disposition'] = `attachment; filename="declaration-${companionNumber}.${ext}"`;
+  }
+  return new Response(new Uint8Array(mark.bytes), { headers });
 };
