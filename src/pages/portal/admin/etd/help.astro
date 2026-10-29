@@ -1,0 +1,221 @@
+---
+export const prerender = false;
+
+import Layout from '../../../../layouts/Layout.astro';
+import { requireAdmin } from '../../../../lib/admin';
+
+// User manual for the Electronic Trade Documents system.
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+---
+<Layout title="ETD user guide" noindex>
+  <article class="wrap">
+    <p class="note"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
+    <h1>Electronic Trade Documents: user guide</h1>
+    <p class="lead">
+      How to issue, pass on, deliver and settle Promissory Notes and Bills of Exchange, and how the system keeps
+      them safe from forgery and copying.
+    </p>
+
+    <nav class="toc" aria-label="Contents">
+      <a href="#what">What this is</a>
+      <a href="#ideas">Three ideas to understand</a>
+      <a href="#start">Quick start</a>
+      <a href="#acts">What you can do with an instrument</a>
+      <a href="#keys">Looking after keys</a>
+      <a href="#check">Checking an instrument</a>
+      <a href="#share">Sharing with a bank or counterparty</a>
+      <a href="#ids">Market identifiers</a>
+      <a href="#trouble">If something goes wrong</a>
+      <a href="#limits">What this does not do</a>
+    </nav>
+
+    <h2 id="what">What this is</h2>
+    <p>
+      A <strong>Promissory Note</strong> is a written promise: "I, the maker, will pay this sum to whoever holds this
+      note." A <strong>Bill of Exchange</strong> is an order: "I, the drawer, instruct you, the drawee, to pay this
+      sum to whoever holds this bill." Both can be passed from one person to another, and whoever holds the
+      instrument is owed the money.
+    </p>
+    <p>
+      This system keeps these instruments electronically, in one trusted register, so that each one has exactly one
+      real original, a clear current holder, and a tamper-proof history.
+    </p>
+
+    <h2 id="ideas">Three ideas to understand</h2>
+    <h3>1. The register is the original</h3>
+    <p>
+      A file can always be copied, so a copy can never prove ownership. Instead, the register records who holds
+      each instrument right now. Anything you print or download is only a picture of it. A copy is worth exactly
+      what the register says about that instrument today.
+    </p>
+    <h3>2. A holder key is your signing pen</h3>
+    <p>
+      Each holder has a <strong>key file</strong>, protected by a passphrase. Passing on, acknowledging payment, or
+      changing a key all need the current holder's key file and passphrase. Without it, nobody, including an
+      administrator, can move the instrument on that holder's behalf. The key is created in your own browser and
+      never sent to the server.
+    </p>
+    <h3>3. The history cannot be rewritten</h3>
+    <p>
+      Every action is added to the instrument's history as a signed entry linked to the one before. If anyone
+      alters, removes or reorders an entry, or changes the instrument's terms, the check fails and the page shows
+      a red warning.
+    </p>
+
+    <h2 id="start">Quick start</h2>
+    <h3>Step 1. Create a holder key (once per person or organisation)</h3>
+    <ol>
+      <li>Open <a href="/portal/admin/etd/keys">Create a holder key</a>.</li>
+      <li>Enter a passphrase and repeat it. Use a long one you will remember. A passphrase is strongly recommended.</li>
+      <li>Click <strong>Generate key</strong>. A key file downloads. Store it safely and keep a backup copy in a second place.</li>
+      <li>Copy the <strong>public key</strong> shown on screen. It is safe to share. You will need it whenever you are named as the payee or the new holder.</li>
+    </ol>
+
+    <h3>Step 2. Issue an instrument</h3>
+    <ol>
+      <li>On the <a href="/portal/admin/etd">main page</a>, choose <strong>Promissory Note</strong> or <strong>Bill of Exchange</strong>.</li>
+      <li>Enter the amount, currency (for example GBP), issue date, place of issue and when it is payable (a date, or "on demand").</li>
+      <li>Fill in the parties (see the table below) and paste the <strong>payee's public key</strong>.</li>
+      <li>Add interest, governing law or extra clauses if needed.</li>
+      <li>Click <strong>Issue and sign</strong>. The terms are now sealed and cannot be edited. If something is wrong, cancel and issue a new one.</li>
+    </ol>
+
+    <table class="t">
+      <thead><tr><th>Role</th><th>Who they are</th><th>Used on</th></tr></thead>
+      <tbody>
+        <tr><td>Maker</td><td>Promises to pay</td><td>Promissory Note</td></tr>
+        <tr><td>Drawer</td><td>Orders someone else to pay</td><td>Bill of Exchange</td></tr>
+        <tr><td>Drawee</td><td>The person told to pay; becomes liable once they accept</td><td>Bill of Exchange</td></tr>
+        <tr><td>Payee</td><td>First person to be paid, and first holder</td><td>Both</td></tr>
+        <tr><td>Holder</td><td>Whoever currently holds the instrument and is owed the money</td><td>Both</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="acts">What you can do with an instrument</h2>
+    <p>Open an instrument from the main list. Each action below is recorded in its history.</p>
+    <dl class="defs">
+      <dt>Transfer (endorse)</dt>
+      <dd>
+        Pass the instrument to a new holder. Enter their name and public key. The <strong>current holder</strong>
+        then chooses their key file, enters their passphrase and clicks <strong>Sign and record transfer</strong>.
+        After a transfer, the previous holder can no longer act on the instrument.
+      </dd>
+      <dt>Delivery</dt>
+      <dd>
+        Records how and when the instrument reached the current holder (for example by hand, post or secure link).
+        Delivery is marked again after each transfer, because the new holder has not yet received it.
+      </dd>
+      <dt>Acceptance (bills only)</dt>
+      <dd>Records that the drawee has agreed to pay the bill.</dd>
+      <dt>Mark paid</dt>
+      <dd>
+        The holder confirms they have been paid in full, signing with their key. This ends the instrument
+        permanently. Nobody else can mark it paid for them.
+      </dd>
+      <dt>Cancel</dt>
+      <dd>Ends the instrument permanently, with a recorded reason (for example, issued in error). It cannot be undone.</dd>
+      <dt>Change holder key</dt>
+      <dd>Move to a new key, for example if you think the old file has been seen by someone else. Signed with the old key.</dd>
+    </dl>
+
+    <h2 id="keys">Looking after keys</h2>
+    <ul>
+      <li><strong>Whoever has the key file and passphrase controls the instrument.</strong> Treat them like the instrument itself.</li>
+      <li>Keep the key file and the passphrase in different places. Never send both together.</li>
+      <li>Keep a backup of the key file. There is no "forgot password": the passphrase cannot be reset or recovered.</li>
+      <li>If you suspect a key has been exposed, use <strong>Change holder key</strong> straight away.</li>
+      <li>
+        <strong>Lost key:</strong> the instrument cannot be moved until an administrator performs a
+        <em>witnessed recovery</em>. They must verify the holder in person and record how. This appears in the
+        history as registry-witnessed rather than holder-signed, so everyone can see it was used.
+      </li>
+    </ul>
+
+    <h2 id="check">Checking an instrument</h2>
+    <p>Every time an instrument page opens, the system re-checks everything from scratch. Look at the box at the top:</p>
+    <ul>
+      <li><strong>Green "Verified":</strong> the terms and history are intact. The status, current holder and holder key shown are the real ones.</li>
+      <li><strong>Red "Failed verification":</strong> do not rely on it. Something has been altered or is inconsistent. The system refuses any further action on it.</li>
+    </ul>
+    <p>
+      <strong>Printable copy</strong> opens a page you can print or save as PDF. It is marked COPY, is not
+      negotiable, and shows the status and holder at the moment of printing. Only the register shows today's
+      truth.
+    </p>
+    <p>
+      <strong>Download signed bundle</strong> gives a file containing the instrument, its history and the public
+      keys needed to check it, so a technical reviewer can verify it independently of this website.
+    </p>
+
+    <h2 id="share">Sharing with a bank or counterparty</h2>
+    <p>
+      A bank, custodian or counterparty may want to check an instrument themselves without a portal login.
+      Create a <a href="/portal/admin/etd/api-keys">read-only API key</a> for them, with a label naming the
+      organisation. The key is shown once, so copy it immediately and pass it to them securely.
+    </p>
+    <ul>
+      <li>A key can only <em>read</em> an instrument's live status and signed bundle. It can never change anything.</li>
+      <li>Create one key per organisation, so you can revoke one without affecting the others.</li>
+      <li>The <strong>Standard export (JSON)</strong> on each instrument is a machine-readable version of its terms, parties, identifiers and status.</li>
+    </ul>
+
+    <h2 id="ids">Market identifiers</h2>
+    <p>
+      Banks and clearing houses recognise standard identifiers. You can record them when issuing; the system
+      checks they are well formed but cannot create them.
+    </p>
+    <table class="t">
+      <thead><tr><th>Identifier</th><th>What it identifies</th><th>Where it comes from</th></tr></thead>
+      <tbody>
+        <tr><td>LEI</td><td>A company or organisation (20 characters)</td><td>Registered through an accredited LEI provider</td></tr>
+        <tr><td>BIC</td><td>A bank (8 or 11 characters)</td><td>The bank itself (SWIFT)</td></tr>
+        <tr><td>ISIN</td><td>A security</td><td>A national numbering agency (the London Stock Exchange for GB)</td></tr>
+        <tr><td>SEDOL</td><td>A security traded in the UK and Ireland</td><td>London Stock Exchange</td></tr>
+        <tr><td>CUSIP</td><td>A North American security</td><td>CUSIP Global Services</td></tr>
+        <tr><td>CFI</td><td>The type of instrument (6 letters)</td><td>Classification code, ISO 10962</td></tr>
+      </tbody>
+    </table>
+    <p>Most ordinary notes and bills do not have an ISIN, SEDOL or CUSIP. Leave them blank unless you have been issued one.</p>
+
+    <h2 id="trouble">If something goes wrong</h2>
+    <table class="t">
+      <thead><tr><th>Message</th><th>What it means and what to do</th></tr></thead>
+      <tbody>
+        <tr><td>"Wrong passphrase"</td><td>The passphrase does not match that key file. Try again, and check you chose the right file.</td></tr>
+        <tr><td>"Transfer is not signed by the current holder's key"</td><td>The key file used is not the current holder's. Find the right file, or ask whether the holder changed key.</td></tr>
+        <tr><td>"This instrument changed since you loaded it"</td><td>Someone else recorded an action in the meantime. Reload the page and check before trying again. This is the system stopping a double transfer.</td></tr>
+        <tr><td>"That LEI / ISIN … is not valid"</td><td>A character is wrong. Check the identifier against the original.</td></tr>
+        <tr><td>"Instrument is already paid / cancelled"</td><td>It has ended. No further actions are possible.</td></tr>
+        <tr><td>"This browser does not support Ed25519 keys"</td><td>Use a current version of Chrome, Edge, Firefox or Safari.</td></tr>
+        <tr><td>Red "Failed verification"</td><td>Stop and do not rely on the instrument. Contact the administrator, and do not pass it on.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="limits">What this does not do</h2>
+    <ul>
+      <li>It is a <strong>register</strong>, not a trading venue. It records and protects ownership. Finding buyers, agreeing prices and moving the actual money happen elsewhere.</li>
+      <li>Clearing and settlement through a clearing house still need a regulated bank or custodian.</li>
+      <li>It does not give legal advice. Whether an electronic instrument is enforceable depends on the law that governs it. Take legal advice before relying on one for real value.</li>
+      <li>Cancellation, delivery and acceptance are recorded by administrators and are not signed by the holder, so use them carefully.</li>
+    </ul>
+  </article>
+</Layout>
+
+<style>
+  .wrap { padding: 32px 0; max-width: 760px; color: var(--sf-text); line-height: 1.6; }
+  h1 { font-size: 1.6rem; margin: 0 0 8px; }
+  h2 { font-size: 1.2rem; margin: 40px 0 8px; padding-top: 8px; border-top: 1px solid var(--sf-border); }
+  h3 { font-size: 1rem; margin: 20px 0 6px; }
+  .lead { font-size: 1.05rem; color: var(--sf-text-muted); }
+  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+  .toc a { padding: 6px 12px; border-radius: var(--sf-radius-full); font-size: 0.8rem; background: var(--sf-primary-soft); color: var(--sf-ink); text-decoration: none; }
+  ol, ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .defs dt { font-weight: 600; margin-top: 12px; }
+  .defs dd { margin: 2px 0 0; color: var(--sf-text-muted); }
+  .t { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 12px 0; display: block; overflow-x: auto; }
+  .t th, .t td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--sf-border); vertical-align: top; }
+  .t th { color: var(--sf-text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+</style>

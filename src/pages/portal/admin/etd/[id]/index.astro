@@ -70,7 +70,7 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
 ---
 <Layout title={`${t.serial} — ETD`} noindex>
   <section class="wrap">
-    <p class="note"><a href="/portal/admin/etd">← All instruments</a></p>
+    <p class="note"><a href="/portal/admin/etd">← All instruments</a> · <a href="/portal/admin/etd/help">User guide</a></p>
     <h1>{typeLabel(t.type)} <span class="serial">{t.serial}</span></h1>
 
     {error && <p role="alert" class="msg bad">{error}</p>}
