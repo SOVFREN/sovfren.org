@@ -17,7 +17,7 @@ import { root } from './etd';
 
 type FeeState = 'held' | 'captured' | 'refunded' | 'capture_pending' | 'refund_pending';
 
-interface FeeLogEntry {
+export interface FeeLogEntry {
   at: string;
   reference: string;
   state: FeeState;
@@ -114,4 +114,29 @@ export async function issueWithFee<T extends { id: string }>(
       warning: 'The instrument was issued and the fee was taken, but SovfHub could not confirm it yet. It will show under "Fees to settle".',
     };
   }
+}
+
+export interface FeeReport {
+  collected: number; // coins, captured fees
+  captured: FeeLogEntry[];
+  refunded: number;
+  unsettled: number;
+  byInstrument: Map<string, FeeLogEntry>;
+}
+
+// Totals from this site's own fee record (ETD_DIR/fees.jsonl): the latest state of
+// each charge. SovfHub's etd_fee_charges table is the ledger of record; this is the
+// view of what was charged through sovfren.org.
+export async function feeReport(): Promise<FeeReport> {
+  const latest = new Map<string, FeeLogEntry>();
+  for (const e of await readLog()) latest.set(e.reference, e);
+  const all = [...latest.values()];
+  const captured = all.filter((e) => e.state === 'captured' || e.state === 'capture_pending');
+  return {
+    collected: captured.reduce((sum, e) => sum + Number(e.amount), 0),
+    captured,
+    refunded: all.filter((e) => e.state === 'refunded').length,
+    unsettled: all.filter((e) => e.state === 'held' || e.state === 'refund_pending').length,
+    byInstrument: new Map(captured.filter((e) => e.instrument).map((e) => [e.instrument!, e])),
+  };
 }
