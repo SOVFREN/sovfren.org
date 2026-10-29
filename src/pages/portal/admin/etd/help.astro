@@ -24,6 +24,7 @@ if (gate instanceof Response) return gate;
       <a href="#start">Quick start</a>
       <a href="#acts">What you can do with an instrument</a>
       <a href="#limits">Limits and the stop</a>
+      <a href="#exchange">Exchanging currency</a>
       <a href="#discount">Selling before maturity</a>
       <a href="#keys">Looking after keys</a>
       <a href="#check">Checking an instrument</a>
@@ -106,6 +107,16 @@ if (gate instanceof Response) return gate;
       anything new until it is paid or cancelled. The <a href="/portal/admin/etd/issuers">Issuers</a> page shows each person's record:
       what they owe, how much they have paid on time and late, and anything overdue. When issuing, always enter the Companion No. if
       there is one, because that is how the same person is recognised each time.
+    </p>
+
+    <h2 id="exchange">Exchanging into another currency</h2>
+    <p>
+      A holder and an issuer can agree to replace an instrument with one in a different currency, for example one in SVC for one in pounds,
+      at a rate <strong>they agree between themselves</strong>. On the instrument, open <strong>Exchange into another currency</strong>, choose
+      the currency and enter the agreed rate. The form shows what the holder is giving up (including any interest built up so far) and what the new
+      instrument will be worth. The holder signs with their key, and you confirm that the issuer has agreed. The registry then creates the new instrument
+      for the same holder and the same issuer, links the two, and closes the old one as "exchanged". The registry only keeps the record: it does not set the
+      rate or move any money. The issuer's limit in the new currency still applies, and an instrument that is past its maturity date has to be paid, not exchanged.
     </p>
 
     <h2 id="discount">Selling before maturity: the value calculator</h2>

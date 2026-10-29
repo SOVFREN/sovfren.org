@@ -32,17 +32,30 @@ import {
   verify as edVerify,
   type KeyObject,
 } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, writeFile, chmod } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, writeFile, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { identifierChecks, validBic, validLei, type IdentifierKey } from './identifiers';
 import { amountInWords } from './amount-words';
 import { etdEnv, root } from './etd-paths';
 import { assertCanIssue } from './etd-risk';
-import { formatRate, isDayCount, maturityValue, parseRate, splitPayable, type DayCount } from './maturity';
+import {
+  convertCents,
+  formatCents,
+  formatFxRate,
+  formatRate,
+  isDayCount,
+  maturityValue,
+  parseCents,
+  parseFxRate,
+  parseRate,
+  splitPayable,
+  valueToday,
+  type DayCount,
+} from './maturity';
 
 export type InstrumentType = 'promissory_note' | 'bill_of_exchange';
-export type EventType = 'issue' | 'transfer' | 'deliver' | 'accept' | 'pay' | 'cancel' | 'rekey' | 'recover';
-export type Status = 'active' | 'paid' | 'cancelled';
+export type EventType = 'issue' | 'transfer' | 'deliver' | 'accept' | 'pay' | 'cancel' | 'rekey' | 'recover' | 'exchange';
+export type Status = 'active' | 'paid' | 'cancelled' | 'exchanged';
 
 export interface Party {
   name: string;
@@ -87,6 +100,8 @@ export interface Terms {
   governingLaw?: string;
   identifiers?: Identifiers;
   clauses?: string;
+  // Set when this instrument was created by exchanging another one for it. Sealed, so the link can't be altered.
+  replaces?: { id: string; serial: string; currency: string; amount: string; rate: string };
 }
 
 export interface EtdEvent {
@@ -271,6 +286,7 @@ export interface IssueInput {
   governingLaw?: string;
   identifiers?: Identifiers;
   clauses?: string;
+  replaces?: { id: string; serial: string; currency: string; amount: string; rate: string };
 }
 
 // ---------- storage with per-instrument locking ----------
@@ -343,6 +359,14 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
   if (!/^\d{1,15}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) throw new Error('Enter a valid amount (e.g. 12500.00).');
   const currency = input.currency.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Currency must be a 3-letter code.');
+  let replaces: Terms['replaces'];
+  if (input.replaces) {
+    const r = input.replaces;
+    if (!/^[0-9a-f]{64}$/.test(r.id) || !/^ETD-\d{4}-\d{6}$/.test(r.serial) || !/^[A-Z]{3}$/.test(r.currency) || parseCents(r.amount) === null || parseFxRate(r.rate) === null) {
+      throw new Error('Invalid exchange details.');
+    }
+    replaces = { id: r.id, serial: r.serial, currency: r.currency, amount: r.amount, rate: r.rate };
+  }
   const symbol = (input.currencySymbol ?? '').trim();
   if (symbol && (symbol.length > 8 || /[<>&"]/.test(symbol))) throw new Error('That currency symbol is not valid.');
   if (!isoDate(input.issuedAt)) throw new Error('Enter a valid issue date.');
@@ -414,6 +438,7 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     ...(input.governingLaw?.trim() ? { governingLaw: input.governingLaw.trim().slice(0, 120) } : {}),
     ...(cleanIdentifiers(input.identifiers) ? { identifiers: cleanIdentifiers(input.identifiers) } : {}),
     ...(input.clauses?.trim() ? { clauses: input.clauses.trim().slice(0, 4000) } : {}),
+    ...(replaces ? { replaces } : {}),
   };
 
   return withLock('__issue__', async () => {
@@ -479,6 +504,19 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
         return `event ${e.seq}: payment is not acknowledged by the current holder's key`;
       s.status = 'paid';
       return null;
+    case 'exchange': {
+      const nc = String(d.newCurrency ?? '');
+      const rate = String(d.rate ?? '');
+      const na = String(d.newAmount ?? '');
+      if (!/^[A-Z]{3}$/.test(nc) || parseFxRate(rate) === null || parseCents(na) === null || !/^[0-9a-f]{64}$/.test(String(d.newId ?? ''))) {
+        return `event ${e.seq}: malformed exchange`;
+      }
+      if (!holderSigOk(s.holderKey, actMessage(docId, e.seq, e.prevHash, 'exchange', [nc, rate, na]), d.holderSig)) {
+        return `event ${e.seq}: exchange is not signed by the current holder's key`;
+      }
+      s.status = 'exchanged';
+      return null;
+    }
     case 'rekey': {
       const newKey = String(d.newKey ?? '');
       if (!validHolderKey(newKey)) return `event ${e.seq}: invalid new key`;
@@ -676,4 +714,141 @@ export async function exportStandard(inst: Instrument, baseUrl: string) {
     history: inst.events.map((e) => ({ seq: e.seq, type: e.type, at: e.at, hash: e.hash })),
     proof: { algorithm: 'Ed25519/SHA-256', bundle: `${baseUrl}/portal/admin/etd/${inst.id}/bundle.json` },
   };
+}
+
+// ---------- exchanging into another currency ----------
+// The holder and the issuer have agreed to replace this instrument with one in another
+// currency at an agreed rate. The registry only keeps the record: it sets no rate and
+// takes no part in the money. The holder signs, with their own key, to give up the old
+// instrument for exactly this new one; the new one is created for the same holder and
+// the same issuer, the two are linked both ways, and the old one is marked "exchanged".
+// The issuer's limit and the overdue stop apply to the new instrument as to any other.
+
+export interface ExchangeInput {
+  newCurrency: string;
+  newSymbol?: string;
+  newSymbolAfter?: boolean;
+  rate: string; // 1 unit of the old currency = `rate` units of the new
+  holderSig: string;
+  debtorAgreed: boolean; // the issuer has agreed (recorded; the issuer has no key in the system yet)
+}
+
+export async function exchangeInstrument(
+  id: string,
+  expectSeq: number,
+  input: ExchangeInput,
+  by: string,
+  today = new Date().toISOString().slice(0, 10),
+): Promise<{ old: Instrument; created: Instrument }> {
+  if (!validId(id)) throw new Error('Not found.');
+  return withLock(id, async () => {
+    const inst = await getInstrument(id);
+    if (!inst) throw new Error('Not found.');
+    const v = await verifyInstrument(inst);
+    if (!v.ok || !v.state) throw new Error('This instrument failed verification; no further acts are allowed.');
+    if (v.state.status !== 'active') throw new Error(`This instrument is already ${v.state.status}.`);
+    const last = inst.events[inst.events.length - 1];
+    if (last.seq !== expectSeq) throw new Error('This instrument changed since you loaded it. Reload and try again.');
+    if (!input.debtorAgreed) throw new Error('Confirm that the issuer has agreed to this exchange.');
+
+    const t = inst.terms;
+    const newCurrency = input.newCurrency.trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(newCurrency)) throw new Error('Choose the currency to exchange into.');
+    if (newCurrency === t.currency) throw new Error('Choose a different currency from the instrument\'s own.');
+    const rateScaled = parseFxRate(input.rate);
+    if (rateScaled === null) throw new Error('Enter the agreed rate as a number above 0, for example 0.95.');
+    const rate = formatFxRate(rateScaled);
+
+    const due = splitPayable(t.payableOn);
+    if (!due.onDemand && due.date && due.date < today) {
+      throw new Error('This instrument is past its maturity date. It has to be paid or dealt with first, not exchanged.');
+    }
+
+    // What the holder is giving up today (principal plus any interest built up), converted at the agreed rate.
+    const fromValue = valueToday(t.amount, t.interestRate, t.dayCount ?? 'ACT/365', t.issuedAt, today);
+    if (!fromValue) throw new Error('Could not value this instrument.');
+    const newCents = convertCents(parseCents(fromValue)!, rateScaled);
+    if (newCents <= 0n) throw new Error('That amount is too small to exchange.');
+    const newAmount = formatCents(newCents);
+
+    // The holder's signature must cover exactly these figures.
+    const message = actMessage(id, last.seq + 1, last.hash, 'exchange', [newCurrency, rate, newAmount]);
+    if (!holderSigOk(v.state.holderKey, message, input.holderSig)) {
+      throw new Error("Not signed by the current holder's key, or the figures changed since the page loaded. Reload and try again.");
+    }
+
+    const created = await issue(
+      {
+        type: t.type,
+        amount: newAmount,
+        currency: newCurrency,
+        currencySymbol: input.newSymbol,
+        currencySymbolAfter: input.newSymbolAfter,
+        issuedAt: today,
+        placeOfIssue: t.placeOfIssue,
+        payableOn: t.payableOn,
+        payableTz: t.payableTz,
+        interestRate: t.interestRate,
+        dayCount: t.dayCount,
+        payee: v.state.holder, // the holder of the old instrument, with their key
+        payeeKey: v.state.holderKey,
+        maker: t.maker,
+        drawer: t.drawer,
+        drawee: t.drawee,
+        governingLaw: t.governingLaw,
+        clauses: t.clauses,
+        replaces: { id, serial: t.serial, currency: t.currency, amount: fromValue, rate },
+      },
+      by,
+    );
+
+    try {
+      const event = await makeEvent(
+        last.seq + 1,
+        'exchange',
+        by,
+        {
+          newId: created.id,
+          newSerial: created.terms.serial,
+          newCurrency,
+          newAmount,
+          fromCurrency: t.currency,
+          fromAmount: fromValue,
+          rate,
+          issuerAgreed: true,
+          holderSig: input.holderSig,
+        },
+        last.hash,
+      );
+      const next: Instrument = { ...inst, events: [...inst.events, event] };
+      const check = replay(next);
+      if (check.error) throw new Error(check.error.replace(/^event \d+: /, ''));
+      await save(next);
+      return { old: next, created };
+    } catch (e) {
+      // never leave a live replacement without the original being discharged
+      await rm(path.join(instDir(), `${created.id}.json`), { force: true });
+      throw e;
+    }
+  });
+}
+
+/** Checks the two-way link of an exchange; returns a warning if it is broken, else null. */
+export async function linkProblem(inst: Instrument): Promise<string | null> {
+  const r = inst.terms.replaces;
+  if (r) {
+    const old = await getInstrument(r.id);
+    const ev = old?.events.find((e) => e.type === 'exchange');
+    if (!old || !ev || (ev.data as { newId?: string }).newId !== inst.id) {
+      return `This instrument says it replaces ${r.serial}, but that instrument has not been marked as exchanged for it. Do not rely on either until this is resolved.`;
+    }
+  }
+  const ex = inst.events.find((e) => e.type === 'exchange');
+  if (ex) {
+    const created = await getInstrument(String((ex.data as { newId?: string }).newId));
+    if (!created || created.terms.replaces?.id !== inst.id) {
+      return `This instrument was exchanged for ${(ex.data as { newSerial?: string }).newSerial}, but that instrument cannot be found or does not point back here. Do not rely on either until this is resolved.`;
+    }
+  }
+  return null;
 }

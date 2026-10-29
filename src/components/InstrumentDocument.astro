@@ -56,8 +56,11 @@ const words = t.amountWords ?? amountInWords(t.amount, t.currency);
 const payee = state?.holder ?? t.payee;
 const sub = (p?: Party) => [p?.ref, p?.lei ? `LEI ${p.lei}` : '', p?.bic ? `BIC ${p.bic}` : ''].filter(Boolean).join(' · ');
 
-const statusLabel = !verified ? 'Failed verification' : status === 'active' ? 'Active' : status === 'paid' ? 'Paid' : 'Cancelled';
-const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status === 'cancelled' ? 'Cancelled' : null;
+const statusLabel = !verified ? 'Failed verification' : ({ active: 'Active', paid: 'Paid', cancelled: 'Cancelled', exchanged: 'Exchanged' } as Record<string, string>)[status] ?? status;
+const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status === 'cancelled' ? 'Cancelled' : status === 'exchanged' ? 'Exchanged' : null;
+const exchanged = inst.events.find((e) => e.type === 'exchange')?.data as
+  | { newSerial: string; newCurrency: string; newAmount: string; rate: string }
+  | undefined;
 ---
 <article class={`doc ${isNote ? 'note' : 'bill'} ${mode}`} aria-label={`${title} ${t.serial}`}>
   <div class="frame">
@@ -131,6 +134,18 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
             Interest accrues at {t.interestRate}% a year ({dayCount}, simple) from the issue date until paid{daily ? `, about ${t.currency} ${money(daily)} a day` : null}.
             {accrued && accrued.days > 0 && <> Indicative value today: <strong>{t.currency} {money(accrued.total)}</strong> ({accrued.days} days). The amount due is calculated on the day of payment.</>}
           </p>
+        )}
+      </section>
+    )}
+
+    {(t.replaces || exchanged) && (
+      <section class="swap">
+        <span class="label">Currency exchange</span>
+        {t.replaces && (
+          <p>Replaces <strong>{t.replaces.serial}</strong> ({t.replaces.currency} {money(t.replaces.amount)}) at the rate the holder and issuer agreed: 1 {t.replaces.currency} = {t.replaces.rate} {t.currency}.</p>
+        )}
+        {exchanged && (
+          <p>Exchanged for <strong>{exchanged.newSerial}</strong> ({exchanged.newCurrency} {money(exchanged.newAmount)}) at the rate the holder and issuer agreed: 1 {t.currency} = {exchanged.rate} {exchanged.newCurrency}. Signed by the holder's key.</p>
         )}
       </section>
     )}
@@ -256,6 +271,7 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
   .status { display: inline-block; padding: 4px 14px; border-radius: 999px; font: 600 0.7rem var(--sf-font-body); letter-spacing: 0.1em; text-transform: uppercase; }
   .status.active { background: rgba(15, 122, 61, 0.1); color: #0b5a2d; }
   .status.paid { background: rgba(22, 98, 214, 0.1); color: #0f4fb5; }
+  .status.exchanged { background: rgba(176, 141, 60, 0.15); color: #7a5d12; }
   .status.cancelled, .status.failed { background: rgba(179, 38, 30, 0.1); color: #8c1d18; }
 
   /* amount */
@@ -286,7 +302,7 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
   .parties { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
   .terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 14px 16px; padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
   .terms dd { font-weight: 500; font-size: 0.9rem; }
-  .value, .endorse { padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
+  .value, .endorse, .swap { padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
   .calc { display: grid; gap: 6px; max-width: 460px; }
   .calc > div { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
   .calc dt { margin: 0; font: 400 0.8rem var(--sf-font-body); letter-spacing: 0; text-transform: none; color: #3b4658; opacity: 1; }
@@ -296,6 +312,7 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
   .calc .total dd { font-family: var(--sf-font-display); font-size: 1.35rem; font-weight: 700; color: var(--accent); }
   .vwords { margin: 8px 0 0; font-family: var(--sf-font-display); font-style: italic; font-weight: 600; font-size: 1.1rem; color: var(--accent); }
   .accrue { margin: 0; font-size: 0.88rem; line-height: 1.5; }
+  .swap p { margin: 4px 0 0; font-size: 0.9rem; line-height: 1.5; }
   .endorse ol { margin: 0; padding-left: 1.2em; font-size: 0.9rem; }
   .endorse li { margin-bottom: 4px; }
   .clauses { white-space: pre-wrap; font-size: 0.88rem; padding: 14px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); margin: 0; }
@@ -326,6 +343,7 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
     white-space: nowrap;
   }
   .stamp.paid { color: #0f4fb5; }
+  .stamp.exchanged { color: #7a5d12; }
   .stamp.cancelled, .stamp.failed { color: #b3261e; opacity: 0.28; }
   .copy {
     position: absolute;

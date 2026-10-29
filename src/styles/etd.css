@@ -149,6 +149,7 @@
 .etd .pill { display: inline-block; padding: 3px 11px; border-radius: var(--sf-radius-full); font-size: 0.74rem; font-weight: 600; text-transform: capitalize; }
 .etd .pill.active { background: var(--sf-primary-soft); color: var(--sf-primary-strong); }
 .etd .pill.paid { background: var(--etd-green-soft); color: #0b5a2d; }
+.etd .pill.exchanged { background: rgba(176, 141, 60, 0.15); color: #7a5d12; }
 .etd .pill.cancelled { background: var(--etd-red-soft); color: #8c1d18; }
 
 /* ── forms ──────────────────────────────────────────────── */

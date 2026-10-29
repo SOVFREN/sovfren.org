@@ -6,9 +6,13 @@ import Layout from '../../../../../layouts/Layout.astro';
 import InstrumentDocument from '../../../../../components/InstrumentDocument.astro';
 import DiscountCalculator from '../../../../../components/DiscountCalculator.astro';
 import { splitPayable } from '../../../../../lib/maturity';
+import { issuerLabel, issuerParty } from '../../../../../lib/etd-risk';
 import '../../../../../styles/etd.css';
 import { requireAdmin } from '../../../../../lib/admin';
-import { act, getInstrument, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
+import { act, exchangeInstrument, getInstrument, linkProblem, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
+import { getSession } from '../../../../../lib/session';
+import { findCurrency, getCurrencies } from '../../../../../lib/currencies';
+import { getFeeQuote, issueWithFee } from '../../../../../lib/etd-fees';
 
 // One instrument: terms, live verification result, current holder, the signed
 // event history, and the acts an admin can record (transfer, deliver, accept,
@@ -16,6 +20,9 @@ import { act, getInstrument, typeLabel, verifyInstrument, type Party } from '../
 const gate = await requireAdmin(Astro);
 if (gate instanceof Response) return gate;
 const adminNumber = gate.profile.companion_number!;
+const session = await getSession(Astro);
+if (!session) return Astro.redirect('/portal/login');
+const { list: currencies } = await getCurrencies();
 
 const id = Astro.params.id ?? '';
 let inst = await getInstrument(id);
@@ -57,6 +64,28 @@ if (Astro.request.method === 'POST') {
       if (f('confirm') !== 'yes') throw new Error('Tick the confirmation box.');
       inst = await act(id, expectSeq, { type: 'recover', newKey: f('newKey'), reason: f('reason') }, adminNumber);
       message = 'Holder key replaced by witnessed recovery.';
+    } else if (kind === 'exchange') {
+      // Replace this instrument with one in another currency, at a rate the holder and issuer agreed.
+      const quote = await getFeeQuote(session.accessToken);
+      if (!quote) throw new Error('Could not reach SovfHub to price this. Nothing was exchanged or charged.');
+      if (quote.charging && f('feeOk') !== 'yes') throw new Error('Please confirm the administration fee.');
+      const code = (f('newCurrency') === '__other' ? f('newCurrencyOther') : f('newCurrency')).trim().toUpperCase();
+      const picked = findCurrency(currencies, code);
+      const out: { old?: typeof inst; created?: typeof inst } = {};
+      const { warning } = await issueWithFee(session.accessToken, adminNumber, async () => {
+        const r = await exchangeInstrument(
+          id,
+          expectSeq,
+          { newCurrency: code, newSymbol: picked?.symbol, newSymbolAfter: picked?.symbolAfter, rate: f('rate'), holderSig: f('holderSig'), debtorAgreed: f('debtorAgreed') === 'yes' },
+          adminNumber,
+        );
+        out.old = r.old;
+        out.created = r.created;
+        return r.created;
+      });
+      if (!warning) return Astro.redirect(`/portal/admin/etd/${out.created!.id}`);
+      inst = out.old!;
+      message = `${warning} The new instrument is ${out.created!.terms.serial}.`;
     } else throw new Error('Unknown action.');
   } catch (e) {
     error = e instanceof Error ? e.message : 'Could not record that.';
@@ -74,6 +103,12 @@ const active = v.ok && v.state?.status === 'active';
 const due = splitPayable(t.payableOn);
 const todayStr = new Date().toISOString().slice(0, 10);
 const canDiscount = active && !due.onDemand && !!due.date && todayStr < due.date;
+// Exchanging needs a live instrument that has not yet passed its maturity date.
+const canExchange = active && (due.onDemand || (!!due.date && due.date >= todayStr));
+const feeQuote = canExchange ? await getFeeQuote(session.accessToken) : null;
+const link = await linkProblem(inst);
+const exchangeEvent = inst.events.find((e) => e.type === 'exchange')?.data as { newId: string; newSerial: string } | undefined;
+const issuer = issuerLabel(issuerParty(t));
 const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei ? ` LEI ${p.lei}` : '') : '—');
 ---
 <Layout title={`${t.serial} — ETD`} noindex>
@@ -82,6 +117,8 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
 
     {error && <p role="alert" class="msg bad">{error}</p>}
     {message && <p role="status" class="msg ok">{message}</p>}
+
+    {link && <p role="alert" class="msg bad"><strong>Linked instrument problem.</strong> {link}</p>}
 
     {v.ok
       ? <p class="msg ok"><strong>Verified.</strong> Signatures and event chain are intact. Status: <strong>{v.state?.status}</strong>.</p>
@@ -97,6 +134,8 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
             <dt>Delivery</dt>
             <dd>{v.state?.delivered ? `Delivered to ${pName(v.state.delivered.to)} by ${v.state.delivered.method}, ${v.state.delivered.at.slice(0, 10)}` : 'Not yet delivered to the current holder'}</dd>
             {t.type === 'bill_of_exchange' && <><dt>Acceptance</dt><dd>{v.state?.accepted ? 'Accepted by the drawee' : 'Not yet accepted'}</dd></>}
+            {t.replaces && <><dt>Replaces</dt><dd><a href={`/portal/admin/etd/${t.replaces.id}`}>{t.replaces.serial}</a></dd></>}
+            {exchangeEvent && <><dt>Exchanged for</dt><dd><a href={`/portal/admin/etd/${exchangeEvent.newId}`}>{exchangeEvent.newSerial}</a></dd></>}
             <dt>Events recorded</dt><dd>{inst.events.length}</dd>
           </dl>
         </div>
@@ -203,6 +242,40 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
             </form>
           </details>
 
+          {canExchange && (
+            <details class="act" id="exchange" data-amount={t.amount} data-rate={t.interestRate ?? ''} data-daycount={t.dayCount ?? 'ACT/365'} data-issued={t.issuedAt} data-currency={t.currency}>
+              <summary><span>Exchange into another currency <span class="sub">agreed with the issuer, signed by the holder</span></span></summary>
+              <form method="post" class="f signed" data-sign="exchange">
+                <input type="hidden" name="act" value="exchange" /><input type="hidden" name="seq" value={last.seq} />
+                <p class="note" style="margin:0">
+                  The holder and the issuer have agreed to replace this instrument with one in another currency, at a rate they have agreed between themselves.
+                  The registry only keeps the record: it does not set the rate or move any money. The new instrument is for the same holder and issuer, and this one is closed.
+                </p>
+                <div class="row">
+                  <label>New currency
+                    <select name="newCurrency" required>
+                      {currencies.filter((c) => c.code !== t.currency).map((c) => <option value={c.code}>{c.symbol} · {c.code} · {c.name}</option>)}
+                      <option value="__other">Other (enter a code)…</option>
+                    </select>
+                  </label>
+                  <label>Agreed rate: 1 {t.currency} =<input name="rate" required inputmode="decimal" placeholder="0.95" /></label>
+                </div>
+                <label id="ex-other" hidden>Currency code (3 letters)<input name="newCurrencyOther" maxlength="3" placeholder="ZAR" style="text-transform:uppercase" /></label>
+                <div class="calc-preview" id="ex-preview" aria-live="polite" hidden></div>
+                <fieldset><legend>Current holder signs</legend>
+                  <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                  <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+                </fieldset>
+                <label class="chk"><input type="checkbox" name="debtorAgreed" value="yes" required /> <span>{issuer || 'The issuer'} has agreed to this exchange.</span></label>
+                {feeQuote?.charging && (
+                  <label class="chk"><input type="checkbox" name="feeOk" value="yes" required /> <span>Charge the administration fee of <strong>{feeQuote.amount} coins</strong> to my Treasury Wallet (balance {feeQuote.balance}). It is returned if this fails.</span></label>
+                )}
+                <input type="hidden" name="holderSig" />
+                <button class="btn" type="submit">Sign and exchange</button>
+              </form>
+            </details>
+          )}
+
           <details class="act">
             <summary><span>Cancel <span class="sub">permanent</span></span></summary>
             <form method="post" class="f">
@@ -249,7 +322,53 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
 </script>
 <script>
   import { actMessage, signWithKeyFile } from '../../../../../lib/etd-client';
+  import { amountInWords } from '../../../../../lib/amount-words';
+  import { convertCents, formatCents, formatFxRate, isDayCount, parseCents, parseFxRate, valueToday } from '../../../../../lib/maturity';
   const ctx = (window as any).__etd as { docId: string; docPrev: string; docSeq: string };
+  // Exchange: show what the holder is giving up and getting, and prepare exactly what they will sign.
+  const exBox = document.getElementById('exchange');
+  if (exBox) {
+    const form = exBox.querySelector('form') as HTMLFormElement;
+    const d = exBox.dataset as { amount: string; rate: string; daycount: string; issued: string; currency: string };
+    const preview = document.getElementById('ex-preview')!;
+    const pick = form.elements.namedItem('newCurrency') as HTMLSelectElement;
+    const other = form.elements.namedItem('newCurrencyOther') as HTMLInputElement;
+    const rateInput = form.elements.namedItem('rate') as HTMLInputElement;
+    const fmt = (v: string) => {
+      const [i, c] = v.split('.');
+      return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${c}`;
+    };
+    const run = () => {
+      const isOther = pick.value === '__other';
+      document.getElementById('ex-other')!.hidden = !isOther;
+      other.required = isOther;
+      form.dataset.sigArgs = '';
+      preview.replaceChildren();
+      const code = (isOther ? other.value : pick.value).trim().toUpperCase();
+      const rate = parseFxRate(rateInput.value);
+      if (!rateInput.value.trim() || rate === null || !/^[A-Z]{3}$/.test(code)) return void (preview.hidden = true);
+      const today = new Date().toISOString().slice(0, 10);
+      const dc = isDayCount(d.daycount) ? d.daycount : 'ACT/365';
+      const value = valueToday(d.amount, d.rate || undefined, dc, d.issued, today);
+      const cents = value ? parseCents(value) : null;
+      if (!value || cents === null) return void (preview.hidden = true);
+      const out = formatCents(convertCents(cents, rate));
+      form.dataset.sigArgs = JSON.stringify([code, formatFxRate(rate), out]);
+      preview.hidden = false;
+      const line = document.createElement('span');
+      line.textContent = `Worth ${d.currency} ${fmt(value)} today. At 1 ${d.currency} = ${formatFxRate(rate)} ${code}, the new instrument is ${code} ${fmt(out)}.`;
+      preview.append(line);
+      const words = amountInWords(out, code);
+      if (words) {
+        const em = document.createElement('em');
+        em.textContent = words;
+        preview.append(em);
+      }
+    };
+    form.addEventListener('input', run);
+    run();
+  }
+
   document.querySelectorAll<HTMLFormElement>('form.signed').forEach((form) => {
     form.addEventListener('submit', async (ev) => {
       if (form.dataset.done) return;
@@ -257,7 +376,17 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
       const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement | null)?.value.trim() ?? '';
       const type = form.dataset.sign!;
       const args =
-        type === 'transfer' ? [val('toName'), val('toRef'), val('toKey')] : type === 'rekey' ? [val('newKey')] : [];
+        type === 'transfer'
+          ? [val('toName'), val('toRef'), val('toKey')]
+          : type === 'rekey'
+            ? [val('newKey')]
+            : type === 'exchange'
+              ? (JSON.parse(form.dataset.sigArgs ?? 'null') as string[] | null) ?? []
+              : [];
+      if (type === 'exchange' && args.length !== 3) {
+        alert('Enter the new currency and a valid agreed rate first.');
+        return;
+      }
       try {
         const file = form.querySelector<HTMLInputElement>('.keyfile')!.files![0];
         const pass = form.querySelector<HTMLInputElement>('.pass')!.value;

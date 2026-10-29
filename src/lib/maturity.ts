@@ -139,3 +139,32 @@ export function yieldFromPrice(face: string, price: string, days: number, dayCou
   const y = roundDiv((f - p) * BigInt(DAY_COUNTS[dayCount]) * 1_000_000n, p * BigInt(days));
   return describe(f, p, days, dayCount, y);
 }
+
+// ---------- exchanging into another currency ----------
+// Two parties agree a rate; these helpers only do the arithmetic, exactly, in whole cents.
+
+/** "0.95" -> 950000n (6 decimal places). Null unless the rate is above 0. */
+export function parseFxRate(rate: string): bigint | null {
+  const m = /^(\d{1,6})(?:\.(\d{1,6}))?$/.exec(rate.trim());
+  if (!m) return null;
+  const scaled = BigInt(m[1]) * 1_000_000n + BigInt((m[2] ?? '').padEnd(6, '0') || '0');
+  return scaled > 0n ? scaled : null;
+}
+
+/** 950000n -> "0.95" */
+export function formatFxRate(scaled: bigint): string {
+  const whole = scaled / 1_000_000n;
+  const frac = (scaled % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : `${whole}`;
+}
+
+/** Cents in one currency -> cents in another at the agreed rate, rounded half up. */
+export function convertCents(cents: bigint, rateScaled: bigint): bigint {
+  return (cents * rateScaled * 2n + 1_000_000n) / 2_000_000n;
+}
+
+/** What an instrument is worth on `today`: principal plus any interest built up so far. */
+export function valueToday(amount: string, rate: string | undefined, dayCount: DayCount, issuedAt: string, today: string): string | null {
+  if (!rate) return parseCents(amount) === null ? null : formatCents(parseCents(amount)!);
+  return maturityValue(amount, rate, dayCount, issuedAt, today)?.total ?? null;
+}
