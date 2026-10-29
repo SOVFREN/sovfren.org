@@ -4,6 +4,7 @@
 // the promise is generated from the signed, structured terms. The signed record
 // in the registry is what governs; this is only how it is presented.
 import type { Instrument, State, Party } from '../lib/etd';
+import { amountInWords } from '../lib/amount-words';
 
 interface Props {
   inst: Instrument;
@@ -30,6 +31,8 @@ const longDate = (d: string) =>
 const onDemand = t.payableOn === 'on demand';
 const when = onDemand ? 'On demand' : `On ${longDate(t.payableOn)}`;
 const sum = `${t.currency} ${money(t.amount)}`;
+// The words sealed at issue; early instruments without them get the same wording computed on the fly.
+const words = t.amountWords ?? amountInWords(t.amount, t.currency);
 const payee = state?.holder ?? t.payee;
 const sub = (p?: Party) => [p?.ref, p?.lei ? `LEI ${p.lei}` : '', p?.bic ? `BIC ${p.bic}` : ''].filter(Boolean).join(' · ');
 
@@ -51,18 +54,19 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
     <div class="amount">
       <span class="label">The sum of</span>
       <span class="fig"><span class="cur">{t.currency}</span> {money(t.amount)}</span>
+      {words && <span class="words"><span class="label">Amount in words</span>{words}</span>}
     </div>
 
     <p class="clause">
       {isNote ? (
         <>
           {when}, I, <strong>{t.maker?.name}</strong>, promise to pay to the order of <strong>{t.payee.name}</strong> the sum
-          of <strong>{sum}</strong>{t.interest ? <>, together with interest as follows: {t.interest}</> : null}.
+          of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}.
         </>
       ) : (
         <>
           {onDemand ? 'At sight' : when}, pay this Bill of Exchange to the order of <strong>{t.payee.name}</strong> the sum
-          of <strong>{sum}</strong>{t.interest ? <>, together with interest as follows: {t.interest}</> : null}.
+          of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}.
           Drawn by <strong>{t.drawer?.name}</strong> upon <strong>{t.drawee?.name}</strong>{state?.accepted ? ', who has accepted it' : ''}.
         </>
       )}
@@ -212,6 +216,8 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
   }
   .amount .label { text-align: center; }
   .fig { font-family: var(--sf-font-display); font-size: clamp(2.1rem, 8vw, 3.4rem); font-weight: 700; line-height: 1.05; color: var(--accent); font-variant-numeric: tabular-nums; word-break: break-all; }
+  .words { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(var(--accent-rgb), 0.2); font-family: var(--sf-font-display); font-size: clamp(1.15rem, 3.6vw, 1.5rem); font-weight: 600; font-style: italic; line-height: 1.3; color: var(--accent); }
+  .words .label { text-align: center; font-style: normal; }
   .cur { font-size: 0.55em; font-weight: 600; letter-spacing: 0.06em; margin-right: 4px; }
 
   /* clause */

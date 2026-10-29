@@ -178,6 +178,10 @@ const money = (v: string) => {
           <label>Amount<input name="amount" required inputmode="decimal" placeholder="12500.00" value={val('amount')} /></label>
           <label>Currency<input name="currency" required maxlength="3" value={val('currency', 'GBP')} style="text-transform:uppercase" /></label>
         </div>
+        <p class="words-preview" id="words-preview" aria-live="polite">
+          <span class="label">Amount in words (sealed into the instrument)</span>
+          <span id="words-text">Enter an amount to see it in words.</span>
+        </p>
         <div class="row">
           <label>Issue date<input type="date" name="issuedAt" required value={val('issuedAt', today)} /></label>
           <label>Payable on (date or "on demand")<input name="payableOn" required value={val('payableOn', 'on demand')} /></label>
@@ -243,7 +247,23 @@ const money = (v: string) => {
 </Layout>
 
 <script>
+  import { amountInWords } from '../../../../lib/amount-words';
   const form = document.getElementById('issue-form') as HTMLFormElement;
+
+  // Live "words" line, like the line on a cheque. The server generates the same words when it issues.
+  const wordsText = document.getElementById('words-text')!;
+  const showWords = () => {
+    const amount = (form.elements.namedItem('amount') as HTMLInputElement).value;
+    const currency = (form.elements.namedItem('currency') as HTMLInputElement).value;
+    const w = amount.trim() ? amountInWords(amount, currency) : null;
+    wordsText.textContent = w ?? (amount.trim() ? 'Enter a valid amount, for example 12500.00' : 'Enter an amount to see it in words.');
+    wordsText.classList.toggle('bad', !w && !!amount.trim());
+  };
+  form.addEventListener('input', (e) => {
+    const n = (e.target as HTMLInputElement).name;
+    if (n === 'amount' || n === 'currency') showWords();
+  });
+  showWords();
   const radios = form.querySelectorAll<HTMLInputElement>('input[name="type"]');
   const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
 

@@ -35,6 +35,7 @@ import {
 import { mkdir, readFile, readdir, rename, writeFile, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { identifierChecks, validBic, validLei, type IdentifierKey } from './identifiers';
+import { amountInWords } from './amount-words';
 
 export type InstrumentType = 'promissory_note' | 'bill_of_exchange';
 export type EventType = 'issue' | 'transfer' | 'deliver' | 'accept' | 'pay' | 'cancel' | 'rekey' | 'recover';
@@ -60,6 +61,7 @@ export interface Terms {
   serial: string;
   nonce: string; // random, so two otherwise identical instruments never share a hash
   amount: string; // decimal string, e.g. "12500.00"
+  amountWords?: string; // the same sum in words, as on a cheque; sealed with the terms (absent on early instruments)
   currency: string; // ISO 4217
   issuedAt: string; // ISO date
   placeOfIssue: string;
@@ -341,6 +343,7 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     nonce: randomBytes(16).toString('hex'),
     amount,
     currency,
+    amountWords: amountInWords(amount, currency) ?? undefined,
     issuedAt: input.issuedAt,
     placeOfIssue: place,
     payableOn,
@@ -573,7 +576,7 @@ export async function exportStandard(inst: Instrument, baseUrl: string) {
       serialNumber: t.serial,
       type: t.type === 'promissory_note' ? 'PROMISSORY_NOTE' : 'BILL_OF_EXCHANGE',
       ...t.identifiers,
-      faceAmount: { value: t.amount, currency: t.currency },
+      faceAmount: { value: t.amount, currency: t.currency, inWords: t.amountWords ?? amountInWords(t.amount, t.currency) ?? undefined },
       issueDate: t.issuedAt,
       maturity: t.payableOn === 'on demand' ? { onDemand: true } : { date: t.payableOn },
       placeOfIssue: t.placeOfIssue,

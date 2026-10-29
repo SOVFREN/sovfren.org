@@ -188,6 +188,12 @@
 .etd .link { background: none; border: 0; color: var(--etd-red); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
 .etd [hidden] { display: none !important; }
 
+/* ── amount in words (cheque style) ─────────────────────── */
+.etd .words-preview { margin: 4px 0 0; padding: 12px 16px; border-radius: var(--sf-radius-md); background: var(--sf-primary-soft); border-left: 4px solid var(--sf-primary); }
+.etd .words-preview .label { display: block; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sf-primary-strong); margin-bottom: 4px; }
+.etd .words-preview #words-text { font-family: var(--sf-font-display); font-size: 1.3rem; font-weight: 600; font-style: italic; color: var(--sf-ink); line-height: 1.3; }
+.etd .words-preview #words-text.bad { color: var(--etd-red); font-style: normal; font-family: var(--sf-font-body); font-size: 0.85rem; font-weight: 500; }
+
 /* ── form sections ──────────────────────────────────────── */
 .etd .step { margin-bottom: 26px; }
 .etd .step-title { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--sf-ink); margin: 0 0 12px; }
