@@ -88,3 +88,54 @@ export function splitPayable(payableOn: string): Payable {
   const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?$/.exec(payableOn.trim());
   return m ? { onDemand: false, date: m[1], time: m[2] } : { onDemand: false };
 }
+
+// ---------- discounting: what a buyer would pay before maturity ----------
+// A holder who wants cash early can sell at a price below the amount due at maturity.
+// Money-market yield convention: price = face / (1 + yield x days / basis), whole days,
+// rounded to the cent. Indicative arithmetic only; nothing here is recorded on the instrument.
+
+const roundDiv = (n: bigint, d: bigint) => (2n * n + d) / (2n * d); // half up, for n >= 0
+
+export interface Discount {
+  days: number;
+  face: string; // paid at maturity
+  price: string; // paid now
+  discount: string; // face - price
+  returnPct: string; // buyer's return over the period on the price paid, %
+  yieldPct: string; // annualised, money-market basis, %
+  discountRatePct: string; // annualised, quoted on face value (bank-discount basis), %
+}
+
+function describe(face: bigint, price: bigint, days: number, dayCount: DayCount, yieldScaled: bigint): Discount {
+  const basis = BigInt(DAY_COUNTS[dayCount]);
+  const diff = face - price;
+  const n = BigInt(days);
+  return {
+    days,
+    face: formatCents(face),
+    price: formatCents(price),
+    discount: formatCents(diff),
+    returnPct: formatRate(price > 0n ? roundDiv(diff * 1_000_000n, price) : 0n),
+    yieldPct: formatRate(yieldScaled),
+    discountRatePct: formatRate(n > 0n && face > 0n ? roundDiv(diff * basis * 1_000_000n, face * n) : 0n),
+  };
+}
+
+/** Price a buyer would pay for `face` due in `days`, to earn `yieldPct` a year. */
+export function priceFromYield(face: string, yieldPct: string, days: number, dayCount: DayCount): Discount | null {
+  const f = parseCents(face);
+  const y = parseRate(yieldPct);
+  if (f === null || y === null || !Number.isInteger(days) || days < 0) return null;
+  const a = 1_000_000n * BigInt(DAY_COUNTS[dayCount]);
+  const b = y * BigInt(days);
+  return describe(f, roundDiv(f * a, a + b), days, dayCount, y);
+}
+
+/** The annual yield a buyer earns by paying `price` for `face` due in `days`. */
+export function yieldFromPrice(face: string, price: string, days: number, dayCount: DayCount): Discount | null {
+  const f = parseCents(face);
+  const p = parseCents(price);
+  if (f === null || p === null || p <= 0n || p > f || !Number.isInteger(days) || days <= 0) return null;
+  const y = roundDiv((f - p) * BigInt(DAY_COUNTS[dayCount]) * 1_000_000n, p * BigInt(days));
+  return describe(f, p, days, dayCount, y);
+}

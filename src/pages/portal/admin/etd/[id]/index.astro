@@ -4,6 +4,8 @@ export const prerender = false;
 import QRCode from 'qrcode';
 import Layout from '../../../../../layouts/Layout.astro';
 import InstrumentDocument from '../../../../../components/InstrumentDocument.astro';
+import DiscountCalculator from '../../../../../components/DiscountCalculator.astro';
+import { splitPayable } from '../../../../../lib/maturity';
 import '../../../../../styles/etd.css';
 import { requireAdmin } from '../../../../../lib/admin';
 import { act, getInstrument, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
@@ -68,6 +70,10 @@ const last = inst.events[inst.events.length - 1];
 const verifyUrl = new URL(`/portal/admin/etd/${inst.id}`, Astro.site ?? Astro.url.origin).href;
 const qr = await QRCode.toDataURL(verifyUrl, { margin: 2, width: 160 });
 const active = v.ok && v.state?.status === 'active';
+// Discounting only makes sense for an active instrument with a fixed maturity that is still in the future.
+const due = splitPayable(t.payableOn);
+const todayStr = new Date().toISOString().slice(0, 10);
+const canDiscount = active && !due.onDemand && !!due.date && todayStr < due.date;
 const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei ? ` LEI ${p.lei}` : '') : '—');
 ---
 <Layout title={`${t.serial} — ETD`} noindex>
@@ -103,6 +109,16 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
         </div>
       </aside>
     </div>
+
+    {canDiscount && (
+      <DiscountCalculator
+        face={t.maturityValue ?? t.amount}
+        currency={t.currency}
+        issuedAt={t.issuedAt}
+        maturityDate={due.date!}
+        dayCount={t.dayCount ?? 'ACT/365'}
+      />
+    )}
 
     {active && (
       <>

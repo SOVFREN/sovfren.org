@@ -1,0 +1,136 @@
+---
+// "Value before maturity": what a buyer would pay for the instrument on a given
+// date, from a yield, or the yield implied by a price. Indicative arithmetic only;
+// nothing here is recorded on the instrument or changes its signed terms.
+interface Props {
+  face: string; // amount due at maturity
+  currency: string;
+  issuedAt: string; // YYYY-MM-DD
+  maturityDate: string; // YYYY-MM-DD
+  dayCount: string; // 'ACT/365' | 'ACT/360'
+}
+const { face, currency, issuedAt, maturityDate, dayCount } = Astro.props;
+const faceShown = face.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+---
+<section
+  class="panel discount"
+  id="discount"
+  data-face={face}
+  data-currency={currency}
+  data-issued={issuedAt}
+  data-maturity={maturityDate}
+>
+  <h2>Value before maturity</h2>
+  <p class="note">
+    The amount due at maturity is <strong>{currency} {faceShown}</strong>. Someone buying it earlier would pay less. Enter the yield
+    they want, or a price you have been offered, to see the other.
+  </p>
+  <div class="f">
+    <div class="row">
+      <label>Valuation date<input type="date" id="dc-date" min={issuedAt} max={maturityDate} /></label>
+      <label>Day count
+        <select id="dc-basis">
+          <option value="ACT/365" selected={dayCount === 'ACT/365'}>Actual/365</option>
+          <option value="ACT/360" selected={dayCount === 'ACT/360'}>Actual/360</option>
+        </select>
+      </label>
+    </div>
+    <fieldset>
+      <legend>I know the</legend>
+      <div class="row">
+        <label class="chk"><input type="radio" name="dc-mode" value="yield" checked /> Yield (% a year)</label>
+        <label class="chk"><input type="radio" name="dc-mode" value="price" /> Price to pay</label>
+      </div>
+      <label><span id="dc-label">Yield, % a year</span><input id="dc-input" inputmode="decimal" placeholder="4.5" /></label>
+    </fieldset>
+    <div class="calc-preview" id="dc-result" aria-live="polite" hidden></div>
+    <p class="note" style="margin:0">
+      Indicative only. It is not an offer and is not recorded on the instrument. Yield is the buyer's annual return on the price paid.
+      The discount rate is the same discount quoted against the amount due at maturity, so it is always a little lower.
+    </p>
+  </div>
+</section>
+
+<script>
+  import { amountInWords } from '../lib/amount-words';
+  import { daysBetween, isDayCount, priceFromYield, yieldFromPrice, type DayCount } from '../lib/maturity';
+
+  const root = document.getElementById('discount');
+  if (root) {
+    const d = root.dataset as { face: string; currency: string; issued: string; maturity: string };
+    const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const date = $<HTMLInputElement>('dc-date');
+    const basis = $<HTMLSelectElement>('dc-basis');
+    const input = $<HTMLInputElement>('dc-input');
+    const label = $('dc-label');
+    const out = $('dc-result');
+    const mode = () => root.querySelector<HTMLInputElement>('input[name="dc-mode"]:checked')!.value;
+    const fmt = (v: string) => {
+      const [i, c] = v.split('.');
+      return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${c}`;
+    };
+
+    // start at today, kept inside the life of the instrument
+    const today = new Date().toISOString().slice(0, 10);
+    date.value = today < d.issued ? d.issued : today > d.maturity ? d.maturity : today;
+
+    const row = (parent: HTMLElement, name: string, value: string, strong = false) => {
+      const div = document.createElement('div');
+      div.className = 'dc-row' + (strong ? ' strong' : '');
+      const a = document.createElement('span');
+      a.textContent = name;
+      const b = document.createElement('span');
+      b.textContent = value;
+      div.append(a, b);
+      parent.append(div);
+    };
+
+    const run = () => {
+      label.textContent = mode() === 'yield' ? 'Yield, % a year' : `Price to pay, ${d.currency}`;
+      input.placeholder = mode() === 'yield' ? '4.5' : '9890.26';
+      out.replaceChildren();
+      if (!input.value.trim()) return void (out.hidden = true);
+      out.hidden = false;
+      const dc: DayCount = isDayCount(basis.value) ? basis.value : 'ACT/365';
+      const days = daysBetween(date.value, d.maturity);
+      if (!date.value || date.value < d.issued) return void (out.textContent = 'Choose a valuation date on or after the issue date.');
+      if (days < 0) return void (out.textContent = 'That date is after maturity.');
+      if (days === 0) return void (out.textContent = 'This is the maturity date: the full amount is due.');
+      const r = mode() === 'yield' ? priceFromYield(d.face, input.value, days, dc) : yieldFromPrice(d.face, input.value, days, dc);
+      if (!r) {
+        out.textContent = mode() === 'yield' ? 'Enter a yield above 0 and up to 100, for example 4.5.' : `Enter a price above 0 and no more than ${d.currency} ${fmt(d.face)}.`;
+        return;
+      }
+      const head = document.createElement('div');
+      head.className = 'dc-head';
+      head.textContent = `${d.currency} ${fmt(r.price)}`;
+      out.append(head);
+      const words = amountInWords(r.price, d.currency);
+      if (words) {
+        const em = document.createElement('em');
+        em.textContent = words;
+        out.append(em);
+      }
+      row(out, 'Days to maturity', String(r.days));
+      row(out, 'Amount due at maturity', `${d.currency} ${fmt(r.face)}`);
+      row(out, 'Discount to amount due', `${d.currency} ${fmt(r.discount)}`);
+      row(out, "Buyer's return over the period", `${r.returnPct}%`);
+      row(out, 'Yield (a year)', `${r.yieldPct}%`, true);
+      row(out, 'Equivalent discount rate (a year)', `${r.discountRatePct}%`);
+    };
+
+    root.addEventListener('input', run);
+    root.addEventListener('change', run);
+    run();
+  }
+</script>
+
+<style>
+  .discount { margin-top: 24px; }
+  .discount h2 { margin-top: 0; }
+  :global(.dc-head) { font-family: var(--sf-font-display); font-size: 2rem; font-weight: 700; line-height: 1.1; color: var(--sf-ink); }
+  :global(.dc-row) { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-top: 1px solid var(--sf-border); font-size: 0.88rem; font-weight: 400; }
+  :global(.dc-row:first-of-type) { margin-top: 10px; }
+  :global(.dc-row.strong) { font-weight: 600; }
+  :global(.dc-row span:last-child) { font-variant-numeric: tabular-nums; text-align: right; }
+</style>
