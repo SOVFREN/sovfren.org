@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import Layout from '../../../../layouts/Layout.astro';
+import '../../../../styles/etd.css';
 import { requireAdmin } from '../../../../lib/admin';
 import { createApiKey, listApiKeys, revokeApiKey } from '../../../../lib/etd-apikeys';
 
@@ -29,8 +30,8 @@ const fmt = (iso?: string) => (iso ? iso.replace('T', ' ').slice(0, 16) : '—')
 const base = new URL(Astro.site ?? Astro.url.origin).origin;
 ---
 <Layout title="ETD API keys" noindex>
-  <section class="wrap">
-    <p class="note"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
+  <section class="wrap etd">
+    <p class="crumb"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
     <h1>API keys</h1>
     <p class="note">
       Read-only keys let a counterparty, bank or custodian check an instrument's live status and fetch its signed
@@ -45,23 +46,23 @@ const base = new URL(Astro.site ?? Astro.url.origin).origin;
       </div>
     )}
 
-    <form method="post" class="f">
+    <form method="post" class="f panel" style="max-width:460px;margin-bottom:24px">
       <label>Label (who is this for?)<input name="label" required maxlength="80" /></label>
       <button class="btn" type="submit">Create key</button>
     </form>
 
     {keys.length > 0 && (
-      <table>
+      <div class="table-card"><table class="stack">
         <thead><tr><th>Label</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead>
         <tbody>
           {keys.map((k) => (
             <tr>
-              <td>{k.label}</td>
-              <td><code>{k.prefix}…</code></td>
-              <td>{fmt(k.createdAt)}</td>
-              <td>{fmt(k.lastUsedAt)}</td>
-              <td>{k.revokedAt ? `revoked ${fmt(k.revokedAt)}` : 'active'}</td>
-              <td>
+              <td data-label="Label">{k.label}</td>
+              <td data-label="Key"><code>{k.prefix}…</code></td>
+              <td data-label="Created">{fmt(k.createdAt)}</td>
+              <td data-label="Last used">{fmt(k.lastUsedAt)}</td>
+              <td data-label="Status">{k.revokedAt ? `revoked ${fmt(k.revokedAt)}` : 'active'}</td>
+              <td data-label="">
                 {!k.revokedAt && (
                   <form method="post"><input type="hidden" name="do" value="revoke" /><input type="hidden" name="id" value={k.id} /><button class="link" type="submit">Revoke</button></form>
                 )}
@@ -69,7 +70,7 @@ const base = new URL(Astro.site ?? Astro.url.origin).origin;
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     )}
 
     <h2>Using a key</h2>
@@ -81,22 +82,3 @@ curl -H "Authorization: Bearer etdk_..." \
   {base}/api/etd/&lt;instrument id&gt;/bundle</pre>
   </section>
 </Layout>
-
-<style>
-  .wrap { padding: 32px 0; max-width: 820px; }
-  .wrap h1 { font-size: 1.5rem; margin: 0 0 8px; color: var(--sf-text); }
-  .wrap h2 { font-size: 1.1rem; margin: 32px 0 8px; color: var(--sf-text); }
-  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
-  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
-  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
-  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
-  .key { font-family: monospace; word-break: break-all; user-select: all; margin: 6px 0 0; }
-  .f { display: flex; flex-direction: column; gap: 12px; max-width: 420px; margin: 16px 0 24px; }
-  .f label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
-  .f input { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; color: var(--sf-text); display: block; overflow-x: auto; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sf-border); white-space: nowrap; }
-  th { color: var(--sf-text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .link { background: none; border: 0; color: #8f1717; cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
-  pre { background: var(--sf-primary-soft); padding: 12px; border-radius: var(--sf-radius-md); font-size: 0.8rem; overflow-x: auto; color: var(--sf-text); }
-</style>

@@ -2,8 +2,9 @@
 export const prerender = false;
 
 import QRCode from 'qrcode';
+import InstrumentDocument from '../../../../../components/InstrumentDocument.astro';
 import { requireAdmin } from '../../../../../lib/admin';
-import { getInstrument, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
+import { getInstrument, verifyInstrument } from '../../../../../lib/etd';
 
 // Printable information copy (use the browser's Print > Save as PDF). It is
 // deliberately marked as a copy: the authoritative original is the registry
@@ -15,13 +16,10 @@ const inst = await getInstrument(Astro.params.id ?? '');
 if (!inst) return new Response('Not found', { status: 404 });
 
 const v = await verifyInstrument(inst);
-const t = inst.terms;
 const last = inst.events[inst.events.length - 1];
 const base = new URL(Astro.site ?? Astro.url.origin).origin;
-const qr = await QRCode.toDataURL(`${base}/api/etd/${inst.id}`, { margin: 1, width: 200 });
-const party = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei ? ` · LEI ${p.lei}` : '') : '—');
+const qr = await QRCode.toDataURL(`${base}/api/etd/${inst.id}`, { margin: 1, width: 240 });
 const printedAt = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-const title = typeLabel(t.type);
 ---
 <!doctype html>
 <html lang="en">
@@ -29,62 +27,49 @@ const title = typeLabel(t.type);
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>{t.serial} — {title}</title>
-  <style>
-    body { font-family: Georgia, 'Times New Roman', serif; color: #0f172a; max-width: 780px; margin: 24px auto; padding: 0 20px; position: relative; }
-    .banner { border: 2px solid #8f1717; color: #8f1717; padding: 8px 12px; text-align: center; font: 600 0.8rem system-ui, sans-serif; letter-spacing: 0.04em; }
-    .fail { background: #8f1717; color: #fff; }
-    h1 { text-align: center; margin: 28px 0 4px; font-size: 1.9rem; letter-spacing: 0.04em; text-transform: uppercase; }
-    .serial { text-align: center; font: 0.9rem monospace; color: #475569; margin-bottom: 24px; }
-    .amount { text-align: center; font-size: 1.6rem; margin: 16px 0 24px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-    th { text-align: left; width: 11rem; color: #475569; font-weight: normal; vertical-align: top; }
-    th, td { padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
-    .clauses { white-space: pre-wrap; }
-    .foot { display: flex; gap: 20px; align-items: flex-start; margin-top: 28px; font: 0.72rem/1.5 system-ui, sans-serif; color: #475569; }
-    .foot code { word-break: break-all; }
-    button { margin: 16px 0; font: inherit; padding: 8px 16px; cursor: pointer; }
-    .watermark { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: -1; }
-    .watermark span { transform: rotate(-30deg); font: 700 9rem system-ui, sans-serif; color: rgba(143, 23, 23, 0.07); letter-spacing: 0.1em; }
-    @media print { button { display: none; } }
+  <title>{inst.terms.serial}: information copy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style is:global>
+    :root {
+      --sf-font-display: 'Cormorant Garamond', 'Times New Roman', serif;
+      --sf-font-body: Poppins, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef2f8; font-family: var(--sf-font-body); color: #1b2433; }
+    .sheet { max-width: 820px; margin: 0 auto; padding: 16px 16px 40px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; font-size: 0.85rem; }
+    .bar button { font: inherit; font-weight: 600; padding: 10px 20px; border: 0; border-radius: 999px; background: #1662d6; color: #fff; cursor: pointer; }
+    .bar button:hover { background: #0f4fb5; }
+    .banner { border: 1.5px solid #b3261e; background: #fff; color: #8c1d18; padding: 10px 14px; border-radius: 10px; text-align: center; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.03em; margin-bottom: 14px; }
+    .banner.fail { background: #b3261e; color: #fff; }
+    .meta { margin-top: 14px; font-size: 0.7rem; line-height: 1.6; color: #5b6676; word-break: break-all; }
+    @page { size: A4; margin: 12mm; }
+    @media print {
+      body { background: #fff; }
+      .sheet { max-width: none; padding: 0; }
+      .bar { display: none; }
+    }
   </style>
 </head>
 <body>
-  <div class="watermark" aria-hidden="true"><span>COPY</span></div>
-  <button onclick="window.print()">Print / Save as PDF</button>
-  <div class={`banner ${v.ok ? '' : 'fail'}`}>
-    {v.ok
-      ? 'INFORMATION COPY — NOT NEGOTIABLE. Holding or presenting this page confers no rights. Status can change; always check the registry.'
-      : 'FAILED VERIFICATION — DO NOT RELY ON THIS DOCUMENT'}
-  </div>
-
-  <h1>{title}</h1>
-  <div class="serial">{t.serial}</div>
-  <div class="amount"><strong>{t.currency} {t.amount}</strong></div>
-
-  <table>
-    <tbody>
-      <tr><th>Issued</th><td>{t.issuedAt}, {t.placeOfIssue}</td></tr>
-      <tr><th>Payable</th><td>{t.payableOn === 'on demand' ? 'On demand' : `On ${t.payableOn}`}</td></tr>
-      {t.maker && <tr><th>Maker (promises to pay)</th><td>{party(t.maker)}</td></tr>}
-      {t.drawer && <tr><th>Drawer</th><td>{party(t.drawer)}</td></tr>}
-      {t.drawee && <tr><th>Drawee (to pay)</th><td>{party(t.drawee)}{v.state?.accepted ? ' — accepted' : ''}</td></tr>}
-      <tr><th>Pay to the order of</th><td>{party(t.payee)}</td></tr>
-      {t.interest && <tr><th>Interest</th><td>{t.interest}</td></tr>}
-      {t.governingLaw && <tr><th>Governing law</th><td>{t.governingLaw}</td></tr>}
-      {t.identifiers && Object.entries(t.identifiers).map(([k, val]) => <tr><th>{k.toUpperCase()}</th><td>{val}</td></tr>)}
-      {t.clauses && <tr><th>Clauses</th><td class="clauses">{t.clauses}</td></tr>}
-      <tr><th>Status at printing</th><td>{v.state?.status}</td></tr>
-      <tr><th>Holder at printing</th><td>{party(v.state?.holder)}</td></tr>
-    </tbody>
-  </table>
-
-  <div class="foot">
-    <img src={qr} alt="QR code to the live registry record" width="120" height="120" />
-    <div>
-      <p>Printed {printedAt}. The QR code links to the live registry record, which requires an API key.</p>
-      <p>Document ID: <code>{inst.id}</code><br />Chain head at printing (event {last.seq}): <code>{last.hash}</code><br />Signing key: <code>{inst.kid}</code></p>
+  <main class="sheet">
+    <div class="bar">
+      <span>Information copy · printed {printedAt}</span>
+      <button onclick="window.print()">Print / Save as PDF</button>
     </div>
-  </div>
+    <div class={`banner ${v.ok ? '' : 'fail'}`}>
+      {v.ok
+        ? 'INFORMATION COPY. NOT NEGOTIABLE. Holding or presenting this page confers no rights. Status can change; always check the registry.'
+        : 'FAILED VERIFICATION. DO NOT RELY ON THIS DOCUMENT.'}
+    </div>
+    <InstrumentDocument inst={inst} state={v.state} verified={v.ok} qr={qr} mode="print" />
+    <p class="meta">
+      Document ID: {inst.id}<br />
+      Chain head at printing (event {last.seq}): {last.hash}<br />
+      The QR code links to the live registry record, which requires an API key.
+    </p>
+  </main>
 </body>
 </html>

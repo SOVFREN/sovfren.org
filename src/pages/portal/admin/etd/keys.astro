@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import Layout from '../../../../layouts/Layout.astro';
+import '../../../../styles/etd.css';
 import { requireAdmin } from '../../../../lib/admin';
 
 // Creates a holder key in the browser. The private key is downloaded as a file
@@ -10,8 +11,8 @@ const gate = await requireAdmin(Astro);
 if (gate instanceof Response) return gate;
 ---
 <Layout title="Holder key" noindex>
-  <section class="wrap">
-    <p class="note"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
+  <section class="wrap etd">
+    <p class="crumb"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
     <h1>Create a holder key</h1>
     <p class="note">
       A holder key lets a person endorse, transfer or acknowledge payment of an instrument. It is created here
@@ -19,13 +20,13 @@ if (gate instanceof Response) return gate;
       passphrase) controls every instrument held under that key, so keep it safe and back it up. If it is lost,
       the instrument is stuck until an admin performs a witnessed key recovery.
     </p>
-    <form id="gen" class="f">
+    <form id="gen" class="f panel">
       <label>Passphrase (strongly recommended)<input type="password" id="pass" autocomplete="new-password" /></label>
       <label>Repeat passphrase<input type="password" id="pass2" autocomplete="new-password" /></label>
       <button type="submit" class="btn">Generate key</button>
     </form>
     <p id="err" role="alert" class="msg bad" hidden></p>
-    <div id="out" hidden>
+    <div id="out" class="panel" hidden style="margin-top:16px">
       <p class="msg ok">Key created. Your key file has been downloaded. Store it somewhere safe, away from this computer's only copy.</p>
       <label class="pub">Public key (paste this where a public key is requested)
         <textarea id="pub" rows="2" readonly></textarea>
@@ -57,17 +58,3 @@ if (gate instanceof Response) return gate;
     }
   });
 </script>
-
-<style>
-  .wrap { padding: 32px 0; max-width: 620px; }
-  .wrap h1 { font-size: 1.5rem; margin: 0 0 8px; color: var(--sf-text); }
-  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
-  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
-  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
-  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
-  .f { display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
-  label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
-  input, textarea { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
-  textarea { font-family: monospace; font-size: 0.8rem; }
-  [hidden] { display: none !important; }
-</style>

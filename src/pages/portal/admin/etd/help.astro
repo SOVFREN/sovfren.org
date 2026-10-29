@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import Layout from '../../../../layouts/Layout.astro';
+import '../../../../styles/etd.css';
 import { requireAdmin } from '../../../../lib/admin';
 
 // User manual for the Electronic Trade Documents system.
@@ -9,8 +10,8 @@ const gate = await requireAdmin(Astro);
 if (gate instanceof Response) return gate;
 ---
 <Layout title="ETD user guide" noindex>
-  <article class="wrap">
-    <p class="note"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
+  <article class="wrap etd prose">
+    <p class="crumb"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
     <h1>Electronic Trade Documents: user guide</h1>
     <p class="lead">
       How to issue, pass on, deliver and settle Promissory Notes and Bills of Exchange, and how the system keeps
@@ -82,7 +83,7 @@ if (gate instanceof Response) return gate;
       <li>Click <strong>Issue and sign</strong>. The terms are now sealed and cannot be edited. If something is wrong, cancel and issue a new one. If issuing fails for any reason, the fee is returned to your wallet automatically.</li>
     </ol>
 
-    <table class="t">
+    <table>
       <thead><tr><th>Role</th><th>Who they are</th><th>Used on</th></tr></thead>
       <tbody>
         <tr><td>Maker</td><td>Promises to pay</td><td>Promissory Note</td></tr>
@@ -166,7 +167,7 @@ if (gate instanceof Response) return gate;
       Banks and clearing houses recognise standard identifiers. You can record them when issuing; the system
       checks they are well formed but cannot create them.
     </p>
-    <table class="t">
+    <table>
       <thead><tr><th>Identifier</th><th>What it identifies</th><th>Where it comes from</th></tr></thead>
       <tbody>
         <tr><td>LEI</td><td>A company or organisation (20 characters)</td><td>Registered through an accredited LEI provider</td></tr>
@@ -180,7 +181,7 @@ if (gate instanceof Response) return gate;
     <p>Most ordinary notes and bills do not have an ISIN, SEDOL or CUSIP. Leave them blank unless you have been issued one.</p>
 
     <h2 id="trouble">If something goes wrong</h2>
-    <table class="t">
+    <table>
       <thead><tr><th>Message</th><th>What it means and what to do</th></tr></thead>
       <tbody>
         <tr><td>"Wrong passphrase"</td><td>The passphrase does not match that key file. Try again, and check you chose the right file.</td></tr>
@@ -202,21 +203,3 @@ if (gate instanceof Response) return gate;
     </ul>
   </article>
 </Layout>
-
-<style>
-  .wrap { padding: 32px 0; max-width: 760px; color: var(--sf-text); line-height: 1.6; }
-  h1 { font-size: 1.6rem; margin: 0 0 8px; }
-  h2 { font-size: 1.2rem; margin: 40px 0 8px; padding-top: 8px; border-top: 1px solid var(--sf-border); }
-  h3 { font-size: 1rem; margin: 20px 0 6px; }
-  .lead { font-size: 1.05rem; color: var(--sf-text-muted); }
-  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
-  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
-  .toc a { padding: 6px 12px; border-radius: var(--sf-radius-full); font-size: 0.8rem; background: var(--sf-primary-soft); color: var(--sf-ink); text-decoration: none; }
-  ol, ul { padding-left: 22px; }
-  li { margin-bottom: 6px; }
-  .defs dt { font-weight: 600; margin-top: 12px; }
-  .defs dd { margin: 2px 0 0; color: var(--sf-text-muted); }
-  .t { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 12px 0; display: block; overflow-x: auto; }
-  .t th, .t td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--sf-border); vertical-align: top; }
-  .t th { color: var(--sf-text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
-</style>

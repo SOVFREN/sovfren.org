@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import Layout from '../../../../layouts/Layout.astro';
+import '../../../../styles/etd.css';
 import { requireAdmin } from '../../../../lib/admin';
 import { issue, listInstruments, replay, typeLabel, type InstrumentType } from '../../../../lib/etd';
 import { getSession } from '../../../../lib/session';
@@ -19,11 +20,15 @@ if (!session) return Astro.redirect('/portal/login');
 
 let error: string | null = null;
 let message: string | null = null;
+const posted: Record<string, string> = {}; // kept so a failed issue doesn't lose what was typed
 
 if (Astro.request.method === 'POST') {
   // Reject cross-site form posts.
   if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
   const form = await Astro.request.formData();
+  form.forEach((v, k) => {
+    if (typeof v === 'string') posted[k] = v;
+  });
   const f = (k: string) => String(form.get(k) ?? '');
   const party = (p: string) => ({ name: f(`${p}Name`), ref: f(`${p}Ref`), lei: f(`${p}Lei`), bic: f(`${p}Bic`) });
   if (f('do') === 'settle') {
@@ -73,138 +78,199 @@ const all = (await listInstruments()).sort((a, b) => b.terms.serial.localeCompar
 const today = new Date().toISOString().slice(0, 10);
 const quote = await getFeeQuote(session.accessToken);
 const stuck = (await unsettledFees()).filter((e) => e.by === profile.companion_number);
+const rows = all.map((i) => ({ i, s: replay(i).state }));
+const count = (st: string) => rows.filter((r) => r.s.status === st).length;
+const val = (k: string, d = '') => posted[k] ?? d;
+const type = val('type', 'promissory_note');
+const money = (v: string) => {
+  const [int, dec = '00'] = v.split('.');
+  return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${dec.padEnd(2, '0')}`;
+};
 ---
 <Layout title="Electronic Trade Documents" noindex>
-  <section class="wrap">
-    <h1>Electronic Trade Documents</h1>
-    <p class="note"><a href="/portal">Portal</a> · Promissory Notes and Bills of Exchange. Admin only. <a href="/portal/admin/etd/keys">Create a holder key</a> · <a href="/portal/admin/etd/api-keys">API keys</a> · <a href="/portal/admin/etd/fees">Fees</a> · <a href="/portal/admin/etd/help">User guide</a></p>
+  <section class="wrap etd">
+    <header class="page-head">
+      <span class="eyebrow">Sovfren Society · Trade Register</span>
+      <h1>Electronic Trade Documents</h1>
+      <p class="lead">Issue, transfer and settle Promissory Notes and Bills of Exchange, each sealed with a digital signature.</p>
+      <nav class="etd-nav" aria-label="Trade documents">
+        <a href="/portal/admin/etd" aria-current="page">Instruments</a>
+        <a href="#issue">Issue new</a>
+        <a href="/portal/admin/etd/keys">Holder key</a>
+        <a href="/portal/admin/etd/api-keys">API keys</a>
+        <a href="/portal/admin/etd/fees">Fees</a>
+        <a href="/portal/admin/etd/help">User guide</a>
+        <a href="/portal">Portal</a>
+      </nav>
+    </header>
 
     {error && <p role="alert" class="msg bad">{error}</p>}
     {message && <p role="status" class="msg ok">{message}</p>}
 
     {stuck.length > 0 && (
-      <div class="msg bad">
+      <div class="msg warn">
         <strong>Fees to settle</strong>
         {stuck.map((s) => (
           <form method="post" class="settle">
             <input type="hidden" name="do" value="settle" /><input type="hidden" name="reference" value={s.reference} />
-            {s.amount} coins · {s.instrument ? 'instrument issued, fee not confirmed' : 'not issued, fee to return'} · {s.at.slice(0, 16).replace('T', ' ')}
+            <span>{s.amount} coins · {s.instrument ? 'instrument issued, fee not confirmed' : 'not issued, fee to return'} · {s.at.slice(0, 16).replace('T', ' ')}</span>
             <button class="btn" type="submit">Settle now</button>
           </form>
         ))}
       </div>
     )}
 
-    {all.length === 0 ? (
-      <p class="note">No instruments issued yet.</p>
+    <div class="stats">
+      <div class="stat"><span class="n">{rows.length}</span><span class="l">Instruments</span></div>
+      <div class="stat"><span class="n">{count('active')}</span><span class="l">Active</span></div>
+      <div class="stat"><span class="n">{count('paid')}</span><span class="l">Paid</span></div>
+      <div class="stat"><span class="n">{count('cancelled')}</span><span class="l">Cancelled</span></div>
+    </div>
+
+    {rows.length === 0 ? (
+      <div class="panel empty">No instruments issued yet. Start with the form below.</div>
     ) : (
-      <table>
-        <thead><tr><th>Serial</th><th>Type</th><th>Amount</th><th>Holder</th><th>Status</th></tr></thead>
-        <tbody>
-          {all.map((i) => {
-            const s = replay(i).state;
-            return (
+      <div class="table-card">
+        <table class="stack">
+          <thead><tr><th>Serial</th><th>Type</th><th>Amount</th><th>Holder</th><th>Status</th></tr></thead>
+          <tbody>
+            {rows.map(({ i, s }) => (
               <tr>
-                <td><a href={`/portal/admin/etd/${i.id}`}>{i.terms.serial}</a></td>
-                <td>{typeLabel(i.terms.type)}</td>
-                <td>{i.terms.currency} {i.terms.amount}</td>
-                <td>{s.holder.name}</td>
-                <td><span class={`pill ${s.status}`}>{s.status}</span></td>
+                <td data-label="Serial"><a href={`/portal/admin/etd/${i.id}`}>{i.terms.serial}</a></td>
+                <td data-label="Type">{typeLabel(i.terms.type)}</td>
+                <td data-label="Amount">{i.terms.currency} {money(i.terms.amount)}</td>
+                <td data-label="Holder">{s.holder.name}</td>
+                <td data-label="Status"><span class={`pill ${s.status}`}>{s.status}</span></td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
     )}
 
-    <h2>Issue an instrument</h2>
+    <h2 id="issue">Issue an instrument</h2>
     <p class="note">Once issued, the terms are sealed with a digital signature and cannot be edited. To change anything, cancel and issue a new one.</p>
-    <form method="post" class="f">
-      <label>Type
-        <select name="type" id="type" required>
-          <option value="promissory_note">Promissory Note</option>
-          <option value="bill_of_exchange">Bill of Exchange</option>
-        </select>
-      </label>
-      <div class="row">
-        <label>Amount<input name="amount" required inputmode="decimal" placeholder="12500.00" /></label>
-        <label>Currency<input name="currency" required maxlength="3" value="GBP" /></label>
-      </div>
-      <div class="row">
-        <label>Issue date<input type="date" name="issuedAt" required value={today} /></label>
-        <label>Payable on (date or "on demand")<input name="payableOn" required value="on demand" /></label>
-      </div>
-      <label>Place of issue<input name="placeOfIssue" required maxlength="120" /></label>
 
-      <fieldset class="only-note"><legend>Maker (promises to pay)</legend>
-        <div class="row"><label>Name<input name="makerName" maxlength="120" /></label><label>Companion No. / ref<input name="makerRef" maxlength="60" /></label><label>LEI (optional)<input name="makerLei" maxlength="20" /></label><label>BIC (optional)<input name="makerBic" maxlength="11" /></label></div>
-      </fieldset>
-      <fieldset class="only-bill"><legend>Drawer (orders payment)</legend>
-        <div class="row"><label>Name<input name="drawerName" maxlength="120" /></label><label>Companion No. / ref<input name="drawerRef" maxlength="60" /></label><label>LEI (optional)<input name="drawerLei" maxlength="20" /></label><label>BIC (optional)<input name="drawerBic" maxlength="11" /></label></div>
-      </fieldset>
-      <fieldset class="only-bill"><legend>Drawee (must pay)</legend>
-        <div class="row"><label>Name<input name="draweeName" maxlength="120" /></label><label>Companion No. / ref<input name="draweeRef" maxlength="60" /></label><label>LEI (optional)<input name="draweeLei" maxlength="20" /></label><label>BIC (optional)<input name="draweeBic" maxlength="11" /></label></div>
-      </fieldset>
-      <fieldset><legend>Payee (pay to the order of)</legend>
-        <div class="row"><label>Name<input name="payeeName" required maxlength="120" /></label><label>Companion No. / ref<input name="payeeRef" maxlength="60" /></label><label>LEI (optional)<input name="payeeLei" maxlength="20" /></label><label>BIC (optional)<input name="payeeBic" maxlength="11" /></label></div>
-        <label>Payee public key (from their holder key)<textarea name="payeeKey" rows="2" required class="mono"></textarea></label>
-      </fieldset>
+    <form method="post" class="f panel" id="issue-form">
+      <div class="step">
+        <p class="step-title"><span class="num">1</span> Choose a template</p>
+        <div class="chips" role="group" aria-label="Quick templates">
+          <button type="button" class="chip" data-type="promissory_note" data-days="0">Demand note</button>
+          <button type="button" class="chip" data-type="promissory_note" data-days="30">30-day note</button>
+          <button type="button" class="chip" data-type="bill_of_exchange" data-days="30">30-day bill</button>
+          <button type="button" class="chip" data-type="bill_of_exchange" data-days="90">90-day bill</button>
+        </div>
+        <div class="type-cards">
+          <label class="type-card">
+            <input type="radio" name="type" value="promissory_note" checked={type === 'promissory_note'} />
+            <span class="body"><strong>Promissory Note</strong><span>A written promise by the maker to pay the holder.</span></span>
+          </label>
+          <label class="type-card">
+            <input type="radio" name="type" value="bill_of_exchange" checked={type === 'bill_of_exchange'} />
+            <span class="body"><strong>Bill of Exchange</strong><span>An order from the drawer to the drawee to pay the holder.</span></span>
+          </label>
+        </div>
+      </div>
 
-      <label>Interest (optional)<input name="interest" maxlength="120" /></label>
-      <label>Governing law (optional)<input name="governingLaw" maxlength="120" /></label>
-      <fieldset><legend>Market identifiers (optional, assigned by others, validated here)</legend>
-        <div class="row"><label>ISIN<input name="isin" maxlength="12" /></label><label>SEDOL<input name="sedol" maxlength="7" /></label><label>CUSIP<input name="cusip" maxlength="9" /></label><label>CFI<input name="cfi" maxlength="6" /></label></div>
-      </fieldset>
-      <label>Additional clauses (optional)<textarea name="clauses" rows="4" maxlength="4000"></textarea></label>
-      {quote?.charging && (
-        <label class="chk">
-          <input type="checkbox" name="feeOk" value="yes" required />
-          Charge the administration fee of {quote.amount} coins to my Treasury Wallet (balance {quote.balance}). It is returned if issuing fails.
-        </label>
-      )}
-      {quote && !quote.charging && <p class="note">No administration fee applies at the moment.</p>}
-      {!quote && <p class="note">Could not reach SovfHub to check the fee. Issuing is unavailable until it can.</p>}
-      <button type="submit" class="btn" disabled={!quote}>Issue and sign</button>
+      <div class="step">
+        <p class="step-title"><span class="num">2</span> Amount and dates</p>
+        <div class="row">
+          <label>Amount<input name="amount" required inputmode="decimal" placeholder="12500.00" value={val('amount')} /></label>
+          <label>Currency<input name="currency" required maxlength="3" value={val('currency', 'GBP')} style="text-transform:uppercase" /></label>
+        </div>
+        <div class="row">
+          <label>Issue date<input type="date" name="issuedAt" required value={val('issuedAt', today)} /></label>
+          <label>Payable on (date or "on demand")<input name="payableOn" required value={val('payableOn', 'on demand')} /></label>
+        </div>
+        <label>Place of issue<input name="placeOfIssue" required maxlength="120" value={val('placeOfIssue')} /></label>
+      </div>
+
+      <div class="step">
+        <p class="step-title"><span class="num">3</span> Parties</p>
+        <div class="f">
+          <fieldset class="only-note"><legend>Maker (promises to pay)</legend>
+            <div class="row"><label>Name<input name="makerName" maxlength="120" value={val('makerName')} /></label><label>Companion No. / ref<input name="makerRef" maxlength="60" value={val('makerRef')} /></label></div>
+            <div class="row"><label>LEI (optional)<input name="makerLei" maxlength="20" value={val('makerLei')} /></label><label>BIC (optional)<input name="makerBic" maxlength="11" value={val('makerBic')} /></label></div>
+          </fieldset>
+          <fieldset class="only-bill"><legend>Drawer (orders payment)</legend>
+            <div class="row"><label>Name<input name="drawerName" maxlength="120" value={val('drawerName')} /></label><label>Companion No. / ref<input name="drawerRef" maxlength="60" value={val('drawerRef')} /></label></div>
+            <div class="row"><label>LEI (optional)<input name="drawerLei" maxlength="20" value={val('drawerLei')} /></label><label>BIC (optional)<input name="drawerBic" maxlength="11" value={val('drawerBic')} /></label></div>
+          </fieldset>
+          <fieldset class="only-bill"><legend>Drawee (must pay)</legend>
+            <div class="row"><label>Name<input name="draweeName" maxlength="120" value={val('draweeName')} /></label><label>Companion No. / ref<input name="draweeRef" maxlength="60" value={val('draweeRef')} /></label></div>
+            <div class="row"><label>LEI (optional)<input name="draweeLei" maxlength="20" value={val('draweeLei')} /></label><label>BIC (optional)<input name="draweeBic" maxlength="11" value={val('draweeBic')} /></label></div>
+          </fieldset>
+          <fieldset><legend>Payee (pay to the order of)</legend>
+            <div class="row"><label>Name<input name="payeeName" required maxlength="120" value={val('payeeName')} /></label><label>Companion No. / ref<input name="payeeRef" maxlength="60" value={val('payeeRef')} /></label></div>
+            <div class="row"><label>LEI (optional)<input name="payeeLei" maxlength="20" value={val('payeeLei')} /></label><label>BIC (optional)<input name="payeeBic" maxlength="11" value={val('payeeBic')} /></label></div>
+            <label>Payee public key (from their <a href="/portal/admin/etd/keys">holder key</a>)<textarea name="payeeKey" rows="2" required class="mono">{val('payeeKey')}</textarea></label>
+          </fieldset>
+        </div>
+      </div>
+
+      <details class="more" open={!!(posted.interest || posted.governingLaw || posted.clauses || posted.isin || posted.sedol || posted.cusip || posted.cfi)}>
+        <summary>Optional details: interest, governing law, identifiers, clauses</summary>
+        <div class="f">
+          <div class="row">
+            <label>Interest<input name="interest" maxlength="120" value={val('interest')} /></label>
+            <label>Governing law<input name="governingLaw" maxlength="120" value={val('governingLaw')} /></label>
+          </div>
+          <fieldset><legend>Market identifiers (assigned by others, validated here)</legend>
+            <div class="row">
+              <label>ISIN<input name="isin" maxlength="12" value={val('isin')} /></label>
+              <label>SEDOL<input name="sedol" maxlength="7" value={val('sedol')} /></label>
+              <label>CUSIP<input name="cusip" maxlength="9" value={val('cusip')} /></label>
+              <label>CFI<input name="cfi" maxlength="6" value={val('cfi')} /></label>
+            </div>
+          </fieldset>
+          <label>Additional clauses<textarea name="clauses" rows="4" maxlength="4000">{val('clauses')}</textarea></label>
+        </div>
+      </details>
+
+      <div class="step" style="margin-top:22px;margin-bottom:0">
+        {quote?.charging && (
+          <label class="chk">
+            <input type="checkbox" name="feeOk" value="yes" required />
+            <span>Charge the administration fee of <strong>{quote.amount} coins</strong> to my Treasury Wallet (balance {quote.balance}). It is returned if issuing fails.</span>
+          </label>
+        )}
+        {quote && !quote.charging && <p class="note">No administration fee applies at the moment.</p>}
+        {!quote && <p class="msg warn">Could not reach SovfHub to check the fee. Issuing is unavailable until it can.</p>}
+        <button type="submit" class="btn" disabled={!quote} style="margin-top:14px">Issue and sign</button>
+      </div>
     </form>
   </section>
 </Layout>
 
 <script>
-  const sel = document.getElementById('type') as HTMLSelectElement;
+  const form = document.getElementById('issue-form') as HTMLFormElement;
+  const radios = form.querySelectorAll<HTMLInputElement>('input[name="type"]');
+  const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
+
   const sync = () => {
-    const bill = sel.value === 'bill_of_exchange';
-    document.querySelectorAll<HTMLElement>('.only-bill').forEach((el) => (el.hidden = !bill));
-    document.querySelectorAll<HTMLElement>('.only-note').forEach((el) => (el.hidden = bill));
-    document.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
-    document.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
+    const bill = form.querySelector<HTMLInputElement>('input[name="type"]:checked')?.value === 'bill_of_exchange';
+    form.querySelectorAll<HTMLElement>('.only-bill').forEach((el) => (el.hidden = !bill));
+    form.querySelectorAll<HTMLElement>('.only-note').forEach((el) => (el.hidden = bill));
+    form.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
+    form.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
   };
-  sel.addEventListener('change', sync);
+  radios.forEach((r) => r.addEventListener('change', sync));
+
+  // Quick templates set the type and the payable-on date relative to the issue date.
+  form.querySelectorAll<HTMLButtonElement>('.chip').forEach((chip) =>
+    chip.addEventListener('click', () => {
+      const radio = form.querySelector<HTMLInputElement>(`input[name="type"][value="${chip.dataset.type}"]`)!;
+      radio.checked = true;
+      const days = Number(chip.dataset.days);
+      if (days === 0) {
+        field('payableOn').value = 'on demand';
+      } else {
+        const base = field('issuedAt').value ? new Date(`${field('issuedAt').value}T00:00:00Z`) : new Date();
+        base.setUTCDate(base.getUTCDate() + days);
+        field('payableOn').value = base.toISOString().slice(0, 10);
+      }
+      sync();
+    }),
+  );
   sync();
 </script>
-
-<style>
-  .wrap { padding: 32px 0; max-width: 820px; }
-  .wrap h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--sf-text); }
-  .wrap h2 { font-size: 1.1rem; margin: 36px 0 4px; color: var(--sf-text); }
-  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
-  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
-  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; color: var(--sf-text); display: block; overflow-x: auto; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sf-border); white-space: nowrap; }
-  th { color: var(--sf-text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .pill { padding: 2px 10px; border-radius: var(--sf-radius-full); font-size: 0.75rem; text-transform: capitalize; }
-  .pill.active { background: rgba(22, 98, 214, 0.12); color: #0f4fb5; }
-  .pill.paid { background: rgba(18, 128, 58, 0.12); color: #0f5f2c; }
-  .pill.cancelled { background: rgba(185, 28, 28, 0.1); color: #8f1717; }
-  .f { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
-  .f label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); flex: 1; }
-  .f input, .f select, .f textarea { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
-  .f fieldset { border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); padding: 10px 12px; }
-  .f legend { font-size: 0.8rem; color: var(--sf-text-muted); padding: 0 6px; }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; }
-  .mono { font-family: monospace; font-size: 0.8rem; }
-  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
-  .f .chk { flex-direction: row; align-items: flex-start; gap: 8px; }
-  .settle { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 0.85rem; }
-  [hidden] { display: none !important; }
-</style>
