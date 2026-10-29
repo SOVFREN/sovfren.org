@@ -160,3 +160,29 @@ export function updateNotice(accessToken: string, id: number, title: string, con
 export function deleteNotice(accessToken: string, id: number) {
   return sovfhubUserPost<Record<string, never>>('notices_delete', accessToken, { id: String(id) });
 }
+
+// Electronic Trade Documents administration fee, paid from the Companion's
+// Treasury Wallet. These use the Companion's own SSO token, so only their wallet
+// can be charged, and SovfHub decides the amount. See lib/etd-fees.ts.
+export interface EtdFeeQuote {
+  charging: boolean;
+  amount: string; // wallet coins
+  amountBase: string; // site currency
+  balance: string; // wallet coins
+}
+export interface EtdFeeCharge {
+  charge: { status: 'held' | 'captured' | 'refunded' | 'free'; amount: string };
+}
+
+export function etdFeeQuote(accessToken: string) {
+  return sovfhubUserGet<EtdFeeQuote>('etd_fee_quote', accessToken);
+}
+export function etdFeeHold(accessToken: string, reference: string) {
+  return sovfhubUserPost<EtdFeeCharge>('etd_fee_hold', accessToken, { reference });
+}
+export function etdFeeCapture(accessToken: string, reference: string, instrument: string) {
+  return sovfhubUserPost<EtdFeeCharge>('etd_fee_capture', accessToken, { reference, instrument });
+}
+export function etdFeeRefund(accessToken: string, reference: string) {
+  return sovfhubUserPost<EtdFeeCharge>('etd_fee_refund', accessToken, { reference });
+}

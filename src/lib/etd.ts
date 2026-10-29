@@ -113,7 +113,7 @@ export interface Verification {
 // Read at runtime first: Astro bakes import.meta.env values in at build time, so a
 // variable set only on the running server would otherwise be ignored.
 const etdEnv = (name: 'ETD_DIR' | 'ETD_SIGNING_KEY'): string | undefined => process.env[name] || import.meta.env[name] || undefined;
-const root = () => path.resolve(etdEnv('ETD_DIR') ?? 'data/etd');
+export const root = () => path.resolve(etdEnv('ETD_DIR') ?? 'data/etd');
 const instDir = () => path.join(root(), 'instruments');
 const keyDir = () => path.join(root(), 'keys');
 

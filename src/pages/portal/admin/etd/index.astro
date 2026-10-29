@@ -4,14 +4,21 @@ export const prerender = false;
 import Layout from '../../../../layouts/Layout.astro';
 import { requireAdmin } from '../../../../lib/admin';
 import { issue, listInstruments, replay, typeLabel, type InstrumentType } from '../../../../lib/etd';
+import { getSession } from '../../../../lib/session';
+import { getFeeQuote, issueWithFee, settleFee, unsettledFees } from '../../../../lib/etd-fees';
 
 // Admin-only register of Electronic Trade Documents: issue Promissory Notes
 // and Bills of Exchange, and see every instrument's current status and holder.
+// Issuing costs an administration fee, paid from the issuer's SovfHub Treasury
+// Wallet (the amount is set on SovfHub; 0 means free).
 const gate = await requireAdmin(Astro);
 if (gate instanceof Response) return gate;
 const { profile } = gate;
+const session = await getSession(Astro);
+if (!session) return Astro.redirect('/portal/login');
 
 let error: string | null = null;
+let message: string | null = null;
 
 if (Astro.request.method === 'POST') {
   // Reject cross-site form posts.
@@ -19,8 +26,22 @@ if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const f = (k: string) => String(form.get(k) ?? '');
   const party = (p: string) => ({ name: f(`${p}Name`), ref: f(`${p}Ref`), lei: f(`${p}Lei`), bic: f(`${p}Bic`) });
+  if (f('do') === 'settle') {
+    try {
+      const entry = (await unsettledFees()).find((e) => e.reference === f('reference') && e.by === profile.companion_number);
+      if (!entry) throw new Error('Only the person who was charged can settle this fee.');
+      await settleFee(session.accessToken, entry);
+      message = 'Fee settled.';
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Could not settle that fee.';
+    }
+  } else
   try {
-    const created = await issue(
+    const quote = await getFeeQuote(session.accessToken);
+    if (!quote) throw new Error('Could not reach SovfHub to price this. Nothing was issued or charged.');
+    if (quote.charging && f('feeOk') !== 'yes') throw new Error('Please confirm the administration fee.');
+    const { instrument: created, warning } = await issueWithFee(session.accessToken, profile.companion_number!, () =>
+     issue(
       {
         type: f('type') as InstrumentType,
         amount: f('amount'),
@@ -39,8 +60,10 @@ if (Astro.request.method === 'POST') {
         clauses: f('clauses'),
       },
       profile.companion_number!,
+     ),
     );
-    return Astro.redirect(`/portal/admin/etd/${created.id}`);
+    if (!warning) return Astro.redirect(`/portal/admin/etd/${created.id}`);
+    message = `${warning} Instrument: ${created.terms.serial}.`;
   } catch (e) {
     error = e instanceof Error ? e.message : 'Could not issue that.';
   }
@@ -48,6 +71,8 @@ if (Astro.request.method === 'POST') {
 
 const all = (await listInstruments()).sort((a, b) => b.terms.serial.localeCompare(a.terms.serial));
 const today = new Date().toISOString().slice(0, 10);
+const quote = await getFeeQuote(session.accessToken);
+const stuck = (await unsettledFees()).filter((e) => e.by === profile.companion_number);
 ---
 <Layout title="Electronic Trade Documents" noindex>
   <section class="wrap">
@@ -55,6 +80,20 @@ const today = new Date().toISOString().slice(0, 10);
     <p class="note"><a href="/portal">Portal</a> · Promissory Notes and Bills of Exchange. Admin only. <a href="/portal/admin/etd/keys">Create a holder key</a> · <a href="/portal/admin/etd/api-keys">API keys</a> · <a href="/portal/admin/etd/help">User guide</a></p>
 
     {error && <p role="alert" class="msg bad">{error}</p>}
+    {message && <p role="status" class="msg ok">{message}</p>}
+
+    {stuck.length > 0 && (
+      <div class="msg bad">
+        <strong>Fees to settle</strong>
+        {stuck.map((s) => (
+          <form method="post" class="settle">
+            <input type="hidden" name="do" value="settle" /><input type="hidden" name="reference" value={s.reference} />
+            {s.amount} coins · {s.instrument ? 'instrument issued, fee not confirmed' : 'not issued, fee to return'} · {s.at.slice(0, 16).replace('T', ' ')}
+            <button class="btn" type="submit">Settle now</button>
+          </form>
+        ))}
+      </div>
+    )}
 
     {all.length === 0 ? (
       <p class="note">No instruments issued yet.</p>
@@ -117,7 +156,15 @@ const today = new Date().toISOString().slice(0, 10);
         <div class="row"><label>ISIN<input name="isin" maxlength="12" /></label><label>SEDOL<input name="sedol" maxlength="7" /></label><label>CUSIP<input name="cusip" maxlength="9" /></label><label>CFI<input name="cfi" maxlength="6" /></label></div>
       </fieldset>
       <label>Additional clauses (optional)<textarea name="clauses" rows="4" maxlength="4000"></textarea></label>
-      <button type="submit" class="btn">Issue and sign</button>
+      {quote?.charging && (
+        <label class="chk">
+          <input type="checkbox" name="feeOk" value="yes" required />
+          Charge the administration fee of {quote.amount} coins to my Treasury Wallet (balance {quote.balance}). It is returned if issuing fails.
+        </label>
+      )}
+      {quote && !quote.charging && <p class="note">No administration fee applies at the moment.</p>}
+      {!quote && <p class="note">Could not reach SovfHub to check the fee. Issuing is unavailable until it can.</p>}
+      <button type="submit" class="btn" disabled={!quote}>Issue and sign</button>
     </form>
   </section>
 </Layout>
@@ -156,5 +203,8 @@ const today = new Date().toISOString().slice(0, 10);
   .f legend { font-size: 0.8rem; color: var(--sf-text-muted); padding: 0 6px; }
   .row { display: flex; gap: 12px; flex-wrap: wrap; }
   .mono { font-family: monospace; font-size: 0.8rem; }
+  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
+  .f .chk { flex-direction: row; align-items: flex-start; gap: 8px; }
+  .settle { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 0.85rem; }
   [hidden] { display: none !important; }
 </style>
