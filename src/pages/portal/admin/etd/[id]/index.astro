@@ -1,0 +1,259 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../../../../layouts/Layout.astro';
+import { requireAdmin } from '../../../../../lib/admin';
+import { act, getInstrument, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
+
+// One instrument: terms, live verification result, current holder, the signed
+// event history, and the acts an admin can record (transfer, deliver, accept,
+// pay, cancel).
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+const adminNumber = gate.profile.companion_number!;
+
+const id = Astro.params.id ?? '';
+let inst = await getInstrument(id);
+if (!inst) return new Response('Not found', { status: 404 });
+
+let message: string | null = null;
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
+  const form = await Astro.request.formData();
+  const f = (k: string) => String(form.get(k) ?? '');
+  const expectSeq = Number(f('seq'));
+  try {
+    const kind = f('act');
+    if (!Number.isInteger(expectSeq)) throw new Error('Bad request.');
+    if (kind === 'transfer') {
+      const to: Party = { name: f('toName'), ...(f('toRef').trim() ? { ref: f('toRef').trim() } : {}), ...(f('toLei').trim() ? { lei: f('toLei') } : {}) };
+      inst = await act(id, expectSeq, { type: 'transfer', to, toKey: f('toKey'), holderSig: f('holderSig') }, adminNumber);
+      message = 'Transfer recorded, signed by the holder. The new holder has not yet been marked as delivered.';
+    } else if (kind === 'deliver') {
+      inst = await act(id, expectSeq, { type: 'deliver', method: f('method'), note: f('note') }, adminNumber);
+      message = 'Delivery recorded.';
+    } else if (kind === 'accept') {
+      inst = await act(id, expectSeq, { type: 'accept' }, adminNumber);
+      message = 'Acceptance recorded.';
+    } else if (kind === 'pay') {
+      if (f('confirm') !== 'yes') throw new Error('Tick the confirmation box.');
+      inst = await act(id, expectSeq, { type: 'pay', note: f('note'), holderSig: f('holderSig') }, adminNumber);
+      message = 'Marked paid. The instrument is discharged.';
+    } else if (kind === 'cancel') {
+      if (f('confirm') !== 'yes') throw new Error('Tick the confirmation box.');
+      inst = await act(id, expectSeq, { type: 'cancel', reason: f('reason') }, adminNumber);
+      message = 'Instrument cancelled.';
+    } else if (kind === 'rekey') {
+      inst = await act(id, expectSeq, { type: 'rekey', newKey: f('newKey'), holderSig: f('holderSig') }, adminNumber);
+      message = 'Holder key changed.';
+    } else if (kind === 'recover') {
+      if (f('confirm') !== 'yes') throw new Error('Tick the confirmation box.');
+      inst = await act(id, expectSeq, { type: 'recover', newKey: f('newKey'), reason: f('reason') }, adminNumber);
+      message = 'Holder key replaced by witnessed recovery.';
+    } else throw new Error('Unknown action.');
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not record that.';
+    inst = (await getInstrument(id))!;
+  }
+}
+
+const v = await verifyInstrument(inst);
+const t = inst.terms;
+const last = inst.events[inst.events.length - 1];
+const verifyUrl = new URL(`/portal/admin/etd/${inst.id}`, Astro.site ?? Astro.url.origin).href;
+const qr = await QRCode.toDataURL(verifyUrl, { margin: 2, width: 160 });
+const active = v.ok && v.state?.status === 'active';
+const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei ? ` LEI ${p.lei}` : '') : '—');
+---
+<Layout title={`${t.serial} — ETD`} noindex>
+  <section class="wrap">
+    <p class="note"><a href="/portal/admin/etd">← All instruments</a></p>
+    <h1>{typeLabel(t.type)} <span class="serial">{t.serial}</span></h1>
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+    {message && <p role="status" class="msg ok">{message}</p>}
+
+    {v.ok
+      ? <p class="msg ok">Verified: signatures and event chain are intact. Status: <strong>{v.state?.status}</strong>.</p>
+      : <div class="msg bad" role="alert"><strong>FAILED VERIFICATION — do not rely on this instrument.</strong><ul>{v.errors.map((e) => <li>{e}</li>)}</ul></div>}
+
+    <div class="grid">
+      <dl>
+        <dt>Amount</dt><dd>{t.currency} {t.amount}</dd>
+        <dt>Issued</dt><dd>{t.issuedAt}, {t.placeOfIssue}</dd>
+        <dt>Payable on</dt><dd>{t.payableOn}</dd>
+        {t.maker && <><dt>Maker</dt><dd>{pName(t.maker)}</dd></>}
+        {t.drawer && <><dt>Drawer</dt><dd>{pName(t.drawer)}</dd></>}
+        {t.drawee && <><dt>Drawee</dt><dd>{pName(t.drawee)}{v.state?.accepted ? ' — accepted' : ''}</dd></>}
+        <dt>Original payee</dt><dd>{pName(t.payee)}</dd>
+        <dt>Current holder</dt><dd><strong>{pName(v.state?.holder)}</strong></dd>
+        <dt>Holder key</dt><dd class="mono">{v.state?.holderKey}</dd>
+        <dt>Delivery</dt><dd>{v.state?.delivered ? `Delivered to ${pName(v.state.delivered.to)} by ${v.state.delivered.method}, ${v.state.delivered.at.slice(0, 10)}` : 'Not yet delivered to current holder'}</dd>
+        {t.interest && <><dt>Interest</dt><dd>{t.interest}</dd></>}
+        {t.governingLaw && <><dt>Governing law</dt><dd>{t.governingLaw}</dd></>}
+        {t.identifiers && Object.entries(t.identifiers).map(([k, val]) => <><dt>{k.toUpperCase()}</dt><dd>{val}</dd></>)}
+        {t.clauses && <><dt>Clauses</dt><dd class="pre">{t.clauses}</dd></>}
+      </dl>
+      <div class="seal">
+        <img src={qr} alt="QR code linking to this instrument's live status" width="160" height="160" />
+        <p>Scan for live status. Any copy of this document is only valid if the registry shows it as active and held by the named holder.</p>
+        <a class="btn btn-outline-dark" href={`/portal/admin/etd/${inst.id}/bundle.json`}>Download signed bundle</a>
+        <a class="btn btn-outline-dark" href={`/portal/admin/etd/${inst.id}/export.json`}>Standard export (JSON)</a>
+        <a class="btn btn-outline-dark" href={`/portal/admin/etd/${inst.id}/print`} target="_blank">Printable copy</a>
+      </div>
+    </div>
+
+    <p class="hash">Document hash (ID): {inst.id}<br />Head of chain: {last.hash}<br />Signing key: {inst.kid}</p>
+
+    {active && (
+      <>
+        <h2>Record an act</h2>
+        <div class="acts">
+          <form method="post" class="f signed" data-sign="transfer">
+            <h3>Transfer (endorse) to a new holder</h3>
+            <input type="hidden" name="act" value="transfer" /><input type="hidden" name="seq" value={last.seq} />
+            <label>New holder name<input name="toName" required maxlength="120" /></label>
+            <label>Companion No. / ref<input name="toRef" maxlength="60" /></label>
+            <label>LEI (optional)<input name="toLei" maxlength="20" /></label>
+            <label>New holder's public key<textarea name="toKey" rows="2" required class="mono"></textarea></label>
+            <fieldset><legend>Current holder signs</legend>
+              <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+              <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+            </fieldset>
+            <input type="hidden" name="holderSig" />
+            <button class="btn" type="submit">Sign and record transfer</button>
+          </form>
+          <form method="post" class="f">
+            <h3>Delivery to current holder</h3>
+            <input type="hidden" name="act" value="deliver" /><input type="hidden" name="seq" value={last.seq} />
+            <label>Method<input name="method" required maxlength="120" placeholder="Registered Post / hand / secure link" /></label>
+            <label>Note (optional)<input name="note" maxlength="500" /></label>
+            <button class="btn" type="submit">Record delivery</button>
+          </form>
+          {t.type === 'bill_of_exchange' && !v.state?.accepted && (
+            <form method="post" class="f">
+              <h3>Drawee accepts the bill</h3>
+              <input type="hidden" name="act" value="accept" /><input type="hidden" name="seq" value={last.seq} />
+              <button class="btn" type="submit">Record acceptance</button>
+            </form>
+          )}
+          <form method="post" class="f signed" data-sign="pay">
+            <h3>Mark paid</h3>
+            <input type="hidden" name="act" value="pay" /><input type="hidden" name="seq" value={last.seq} />
+            <label>Note (optional)<input name="note" maxlength="500" /></label>
+            <fieldset><legend>Holder acknowledges payment</legend>
+              <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+              <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+            </fieldset>
+            <input type="hidden" name="holderSig" />
+            <label class="chk"><input type="checkbox" name="confirm" value="yes" required /> Payment received in full. This discharges the instrument permanently.</label>
+            <button class="btn" type="submit">Mark paid</button>
+          </form>
+          <form method="post" class="f signed" data-sign="rekey">
+            <h3>Change holder key</h3>
+            <input type="hidden" name="act" value="rekey" /><input type="hidden" name="seq" value={last.seq} />
+            <label>New public key<textarea name="newKey" rows="2" required class="mono"></textarea></label>
+            <fieldset><legend>Current key signs</legend>
+              <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+              <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+            </fieldset>
+            <input type="hidden" name="holderSig" />
+            <button class="btn" type="submit">Sign and change key</button>
+          </form>
+          <form method="post" class="f">
+            <h3>Lost key: witnessed recovery</h3>
+            <input type="hidden" name="act" value="recover" /><input type="hidden" name="seq" value={last.seq} />
+            <label>New public key<textarea name="newKey" rows="2" required class="mono"></textarea></label>
+            <label>How the holder was verified<input name="reason" required maxlength="500" /></label>
+            <label class="chk"><input type="checkbox" name="confirm" value="yes" required /> I have verified the holder in person. This is recorded as registry-witnessed, not holder-signed.</label>
+            <button class="btn" type="submit">Replace key</button>
+          </form>
+          <form method="post" class="f">
+            <h3>Cancel</h3>
+            <input type="hidden" name="act" value="cancel" /><input type="hidden" name="seq" value={last.seq} />
+            <label>Reason<input name="reason" required maxlength="500" /></label>
+            <label class="chk"><input type="checkbox" name="confirm" value="yes" required /> Cancel permanently. This cannot be undone.</label>
+            <button class="btn" type="submit">Cancel instrument</button>
+          </form>
+        </div>
+      </>
+    )}
+
+    <h2>History</h2>
+    <ol class="hist">
+      {inst.events.map((e) => (
+        <li>
+          <strong>{e.type}</strong> · {e.at.replace('T', ' ').slice(0, 19)} UTC · by {e.by}
+          {e.type === 'transfer' && <> · {pName((e.data as any).from)} → {pName((e.data as any).to)}</>}
+          {e.type === 'deliver' && <> · {(e.data as any).method}</>}
+          {e.type === 'cancel' && <> · {(e.data as any).reason}</>}
+          {e.type === 'recover' && <> · witnessed key recovery: {(e.data as any).reason}</>}
+          {['transfer', 'pay', 'rekey'].includes(e.type) && <> · holder-signed</>}
+          <br /><code>{e.hash.slice(0, 24)}…</code>
+        </li>
+      ))}
+    </ol>
+  </section>
+</Layout>
+
+<script define:vars={{ docId: inst.id, docPrev: last.hash, docSeq: String(last.seq + 1) }}>
+  window.__etd = { docId, docPrev, docSeq };
+</script>
+<script>
+  import { actMessage, signWithKeyFile } from '../../../../../lib/etd-client';
+  const ctx = (window as any).__etd as { docId: string; docPrev: string; docSeq: string };
+  document.querySelectorAll<HTMLFormElement>('form.signed').forEach((form) => {
+    form.addEventListener('submit', async (ev) => {
+      if (form.dataset.done) return;
+      ev.preventDefault();
+      const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement | null)?.value.trim() ?? '';
+      const type = form.dataset.sign!;
+      const args =
+        type === 'transfer' ? [val('toName'), val('toRef'), val('toKey')] : type === 'rekey' ? [val('newKey')] : [];
+      try {
+        const file = form.querySelector<HTMLInputElement>('.keyfile')!.files![0];
+        const pass = form.querySelector<HTMLInputElement>('.pass')!.value;
+        const { sig } = await signWithKeyFile(await file.text(), pass, actMessage(ctx.docId, ctx.docSeq, ctx.docPrev, type, args));
+        (form.elements.namedItem('holderSig') as HTMLInputElement).value = sig;
+        form.dataset.done = '1';
+        form.submit();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Could not sign.');
+      }
+    });
+  });
+</script>
+
+<style>
+  .mono { font-family: monospace; font-size: 0.75rem; word-break: break-all; }
+  .f fieldset { border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .f legend { font-size: 0.8rem; color: var(--sf-text-muted); padding: 0 6px; }
+  .f textarea { padding: 8px 10px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font-family: monospace; font-size: 0.75rem; color: var(--sf-text); }
+  .wrap { padding: 32px 0; max-width: 860px; }
+  .wrap h1 { font-size: 1.5rem; margin: 0 0 12px; color: var(--sf-text); }
+  .serial { color: var(--sf-text-muted); font-size: 1rem; font-weight: 400; }
+  .wrap h2 { font-size: 1.1rem; margin: 32px 0 8px; color: var(--sf-text); }
+  h3 { font-size: 0.95rem; margin: 0; color: var(--sf-text); }
+  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
+  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
+  .msg.ok { background: rgba(18, 128, 58, 0.1); color: #0f5f2c; }
+  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
+  .grid { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  dl { flex: 1; min-width: 280px; display: grid; grid-template-columns: 9rem 1fr; gap: 6px 12px; margin: 0; font-size: 0.9rem; color: var(--sf-text); }
+  dt { color: var(--sf-text-muted); }
+  dd { margin: 0; }
+  .pre { white-space: pre-wrap; }
+  .seal { width: 200px; font-size: 0.8rem; color: var(--sf-text-muted); }
+  .hash { font-family: monospace; font-size: 0.7rem; color: var(--sf-text-muted); word-break: break-all; }
+  .acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .f { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); }
+  .f label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); }
+  .f .chk { flex-direction: row; gap: 8px; align-items: flex-start; }
+  .f input:not([type='checkbox']) { padding: 8px 10px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
+  .hist { font-size: 0.85rem; color: var(--sf-text); padding-left: 20px; }
+  .hist li { margin-bottom: 10px; }
+  code { color: var(--sf-text-muted); }
+</style>

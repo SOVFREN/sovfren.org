@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly SSO_REDIRECT_URI: string;
   readonly ADMIN_COMPANION_NUMBERS?: string;
   readonly ID_MARKS_DIR?: string;
+  readonly ETD_DIR?: string;
+  readonly ETD_SIGNING_KEY?: string;
 }
 
 interface ImportMeta {

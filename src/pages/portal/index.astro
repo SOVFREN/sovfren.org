@@ -126,6 +126,9 @@ const qrCodeDataUrl = registerUrl
       {isAdminCompanion(profile.companion_number) && (
         <a class="btn btn-outline-dark" href="/portal/admin/id-cards">Manage ID cards</a>
       )}
+      {isAdminCompanion(profile.companion_number) && (
+        <a class="btn btn-outline-dark" href="/portal/admin/etd">Electronic Trade Documents</a>
+      )}
 
       <form method="post" action="/portal/logout" class="logout-form">
         <button type="submit" class="link-btn">Sign out</button>

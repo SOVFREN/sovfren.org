@@ -1,0 +1,160 @@
+---
+export const prerender = false;
+
+import Layout from '../../../../layouts/Layout.astro';
+import { requireAdmin } from '../../../../lib/admin';
+import { issue, listInstruments, replay, typeLabel, type InstrumentType } from '../../../../lib/etd';
+
+// Admin-only register of Electronic Trade Documents: issue Promissory Notes
+// and Bills of Exchange, and see every instrument's current status and holder.
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+const { profile } = gate;
+
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  // Reject cross-site form posts.
+  if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
+  const form = await Astro.request.formData();
+  const f = (k: string) => String(form.get(k) ?? '');
+  const party = (p: string) => ({ name: f(`${p}Name`), ref: f(`${p}Ref`), lei: f(`${p}Lei`), bic: f(`${p}Bic`) });
+  try {
+    const created = await issue(
+      {
+        type: f('type') as InstrumentType,
+        amount: f('amount'),
+        currency: f('currency'),
+        issuedAt: f('issuedAt'),
+        placeOfIssue: f('placeOfIssue'),
+        payableOn: f('payableOn'),
+        payee: party('payee'),
+        payeeKey: f('payeeKey'),
+        maker: party('maker'),
+        drawer: party('drawer'),
+        drawee: party('drawee'),
+        interest: f('interest'),
+        governingLaw: f('governingLaw'),
+        identifiers: { isin: f('isin'), sedol: f('sedol'), cusip: f('cusip'), cfi: f('cfi') },
+        clauses: f('clauses'),
+      },
+      profile.companion_number!,
+    );
+    return Astro.redirect(`/portal/admin/etd/${created.id}`);
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not issue that.';
+  }
+}
+
+const all = (await listInstruments()).sort((a, b) => b.terms.serial.localeCompare(a.terms.serial));
+const today = new Date().toISOString().slice(0, 10);
+---
+<Layout title="Electronic Trade Documents" noindex>
+  <section class="wrap">
+    <h1>Electronic Trade Documents</h1>
+    <p class="note"><a href="/portal">Portal</a> · Promissory Notes and Bills of Exchange. Admin only. <a href="/portal/admin/etd/keys">Create a holder key</a> · <a href="/portal/admin/etd/api-keys">API keys</a></p>
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+
+    {all.length === 0 ? (
+      <p class="note">No instruments issued yet.</p>
+    ) : (
+      <table>
+        <thead><tr><th>Serial</th><th>Type</th><th>Amount</th><th>Holder</th><th>Status</th></tr></thead>
+        <tbody>
+          {all.map((i) => {
+            const s = replay(i).state;
+            return (
+              <tr>
+                <td><a href={`/portal/admin/etd/${i.id}`}>{i.terms.serial}</a></td>
+                <td>{typeLabel(i.terms.type)}</td>
+                <td>{i.terms.currency} {i.terms.amount}</td>
+                <td>{s.holder.name}</td>
+                <td><span class={`pill ${s.status}`}>{s.status}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+
+    <h2>Issue an instrument</h2>
+    <p class="note">Once issued, the terms are sealed with a digital signature and cannot be edited. To change anything, cancel and issue a new one.</p>
+    <form method="post" class="f">
+      <label>Type
+        <select name="type" id="type" required>
+          <option value="promissory_note">Promissory Note</option>
+          <option value="bill_of_exchange">Bill of Exchange</option>
+        </select>
+      </label>
+      <div class="row">
+        <label>Amount<input name="amount" required inputmode="decimal" placeholder="12500.00" /></label>
+        <label>Currency<input name="currency" required maxlength="3" value="GBP" /></label>
+      </div>
+      <div class="row">
+        <label>Issue date<input type="date" name="issuedAt" required value={today} /></label>
+        <label>Payable on (date or "on demand")<input name="payableOn" required value="on demand" /></label>
+      </div>
+      <label>Place of issue<input name="placeOfIssue" required maxlength="120" /></label>
+
+      <fieldset class="only-note"><legend>Maker (promises to pay)</legend>
+        <div class="row"><label>Name<input name="makerName" maxlength="120" /></label><label>Companion No. / ref<input name="makerRef" maxlength="60" /></label><label>LEI (optional)<input name="makerLei" maxlength="20" /></label><label>BIC (optional)<input name="makerBic" maxlength="11" /></label></div>
+      </fieldset>
+      <fieldset class="only-bill"><legend>Drawer (orders payment)</legend>
+        <div class="row"><label>Name<input name="drawerName" maxlength="120" /></label><label>Companion No. / ref<input name="drawerRef" maxlength="60" /></label><label>LEI (optional)<input name="drawerLei" maxlength="20" /></label><label>BIC (optional)<input name="drawerBic" maxlength="11" /></label></div>
+      </fieldset>
+      <fieldset class="only-bill"><legend>Drawee (must pay)</legend>
+        <div class="row"><label>Name<input name="draweeName" maxlength="120" /></label><label>Companion No. / ref<input name="draweeRef" maxlength="60" /></label><label>LEI (optional)<input name="draweeLei" maxlength="20" /></label><label>BIC (optional)<input name="draweeBic" maxlength="11" /></label></div>
+      </fieldset>
+      <fieldset><legend>Payee (pay to the order of)</legend>
+        <div class="row"><label>Name<input name="payeeName" required maxlength="120" /></label><label>Companion No. / ref<input name="payeeRef" maxlength="60" /></label><label>LEI (optional)<input name="payeeLei" maxlength="20" /></label><label>BIC (optional)<input name="payeeBic" maxlength="11" /></label></div>
+        <label>Payee public key (from their holder key)<textarea name="payeeKey" rows="2" required class="mono"></textarea></label>
+      </fieldset>
+
+      <label>Interest (optional)<input name="interest" maxlength="120" /></label>
+      <label>Governing law (optional)<input name="governingLaw" maxlength="120" /></label>
+      <fieldset><legend>Market identifiers (optional, assigned by others, validated here)</legend>
+        <div class="row"><label>ISIN<input name="isin" maxlength="12" /></label><label>SEDOL<input name="sedol" maxlength="7" /></label><label>CUSIP<input name="cusip" maxlength="9" /></label><label>CFI<input name="cfi" maxlength="6" /></label></div>
+      </fieldset>
+      <label>Additional clauses (optional)<textarea name="clauses" rows="4" maxlength="4000"></textarea></label>
+      <button type="submit" class="btn">Issue and sign</button>
+    </form>
+  </section>
+</Layout>
+
+<script>
+  const sel = document.getElementById('type') as HTMLSelectElement;
+  const sync = () => {
+    const bill = sel.value === 'bill_of_exchange';
+    document.querySelectorAll<HTMLElement>('.only-bill').forEach((el) => (el.hidden = !bill));
+    document.querySelectorAll<HTMLElement>('.only-note').forEach((el) => (el.hidden = bill));
+    document.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
+    document.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
+  };
+  sel.addEventListener('change', sync);
+  sync();
+</script>
+
+<style>
+  .wrap { padding: 32px 0; max-width: 820px; }
+  .wrap h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--sf-text); }
+  .wrap h2 { font-size: 1.1rem; margin: 36px 0 4px; color: var(--sf-text); }
+  .note { margin: 0 0 16px; color: var(--sf-text-muted); font-size: 0.9rem; }
+  .msg { padding: 10px 14px; border-radius: var(--sf-radius-md); font-size: 0.9rem; }
+  .msg.bad { background: rgba(185, 28, 28, 0.08); color: #8f1717; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; color: var(--sf-text); display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sf-border); white-space: nowrap; }
+  th { color: var(--sf-text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill { padding: 2px 10px; border-radius: var(--sf-radius-full); font-size: 0.75rem; text-transform: capitalize; }
+  .pill.active { background: rgba(22, 98, 214, 0.12); color: #0f4fb5; }
+  .pill.paid { background: rgba(18, 128, 58, 0.12); color: #0f5f2c; }
+  .pill.cancelled { background: rgba(185, 28, 28, 0.1); color: #8f1717; }
+  .f { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
+  .f label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--sf-text-muted); flex: 1; }
+  .f input, .f select, .f textarea { padding: 10px 12px; border: 1px solid var(--sf-border-strong); border-radius: var(--sf-radius-md); font: inherit; color: var(--sf-text); }
+  .f fieldset { border: 1px solid var(--sf-border); border-radius: var(--sf-radius-md); padding: 10px 12px; }
+  .f legend { font-size: 0.8rem; color: var(--sf-text-muted); padding: 0 6px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .mono { font-family: monospace; font-size: 0.8rem; }
+  [hidden] { display: none !important; }
+</style>
