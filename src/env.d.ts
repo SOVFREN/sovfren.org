@@ -14,6 +14,7 @@ interface ImportMetaEnv {
   readonly ID_MARKS_DIR?: string;
   readonly ETD_DIR?: string;
   readonly ETD_SIGNING_KEY?: string;
+  readonly ETD_DEFAULT_LIMIT?: string;
 }
 
 interface ImportMeta {

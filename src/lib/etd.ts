@@ -36,6 +36,8 @@ import { mkdir, readFile, readdir, rename, writeFile, chmod } from 'node:fs/prom
 import path from 'node:path';
 import { identifierChecks, validBic, validLei, type IdentifierKey } from './identifiers';
 import { amountInWords } from './amount-words';
+import { etdEnv, root } from './etd-paths';
+import { assertCanIssue } from './etd-risk';
 import { formatRate, isDayCount, maturityValue, parseRate, splitPayable, type DayCount } from './maturity';
 
 export type InstrumentType = 'promissory_note' | 'bill_of_exchange';
@@ -122,10 +124,7 @@ export interface Verification {
   state?: State;
 }
 
-// Read at runtime first: Astro bakes import.meta.env values in at build time, so a
-// variable set only on the running server would otherwise be ignored.
-const etdEnv = (name: 'ETD_DIR' | 'ETD_SIGNING_KEY'): string | undefined => process.env[name] || import.meta.env[name] || undefined;
-export const root = () => path.resolve(etdEnv('ETD_DIR') ?? 'data/etd');
+export { root };
 const instDir = () => path.join(root(), 'instruments');
 const keyDir = () => path.join(root(), 'keys');
 
@@ -419,6 +418,12 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
 
   return withLock('__issue__', async () => {
     terms.serial = await nextSerial(year);
+    // Loss controls: this person's limit, and the stop if anything of theirs is overdue.
+    // Checked here, inside the lock, so two issues at once cannot both slip under a limit.
+    await assertCanIssue(
+      (await listInstruments()).map((i) => ({ inst: i, state: replay(i).state })),
+      terms,
+    );
     const id = hashTerms(terms);
     if (await getInstrument(id)) throw new Error('An identical instrument already exists.');
     const { priv, kid } = await signingKey();

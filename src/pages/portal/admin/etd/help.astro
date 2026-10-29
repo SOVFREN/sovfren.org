@@ -23,6 +23,7 @@ if (gate instanceof Response) return gate;
       <a href="#ideas">Three ideas to understand</a>
       <a href="#start">Quick start</a>
       <a href="#acts">What you can do with an instrument</a>
+      <a href="#limits">Limits and the stop</a>
       <a href="#discount">Selling before maturity</a>
       <a href="#keys">Looking after keys</a>
       <a href="#check">Checking an instrument</a>
@@ -96,6 +97,16 @@ if (gate instanceof Response) return gate;
         <tr><td>Holder</td><td>Whoever currently holds the instrument and is owed the money</td><td>Both</td></tr>
       </tbody>
     </table>
+
+    <h2 id="limits">Limits and the automatic stop</h2>
+    <p>
+      To reduce losses, each person who issues (the maker of a note, or the drawer of a bill) has a <strong>limit</strong> on how much
+      they can owe at any one time, set separately for each currency. New people start at a standard limit; you can raise it as they
+      prove themselves, or set it to 0 to stop them. If an instrument of theirs passes its maturity date unpaid, they cannot issue
+      anything new until it is paid or cancelled. The <a href="/portal/admin/etd/issuers">Issuers</a> page shows each person's record:
+      what they owe, how much they have paid on time and late, and anything overdue. When issuing, always enter the Companion No. if
+      there is one, because that is how the same person is recognised each time.
+    </p>
 
     <h2 id="discount">Selling before maturity: the value calculator</h2>
     <p>

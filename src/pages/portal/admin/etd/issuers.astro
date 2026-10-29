@@ -1,0 +1,137 @@
+---
+export const prerender = false;
+
+import Layout from '../../../../layouts/Layout.astro';
+import '../../../../styles/etd.css';
+import { requireAdmin } from '../../../../lib/admin';
+import { listInstruments, replay } from '../../../../lib/etd';
+import { defaultLimit, getLimits, records, setLimit } from '../../../../lib/etd-risk';
+import { getCurrencies } from '../../../../lib/currencies';
+
+// Who can issue, how much they owe, and how they have paid so far. Limits are per
+// person and per currency; anyone without one gets the standard starting limit.
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+const adminNumber = gate.profile.companion_number!;
+
+let error: string | null = null;
+let message: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
+  const form = await Astro.request.formData();
+  const f = (k: string) => String(form.get(k) ?? '');
+  try {
+    await setLimit(f('issuer'), f('issuer'), f('currency'), f('amount'), adminNumber);
+    message = `Limit saved: ${f('issuer').trim()} can owe up to ${f('currency').trim().toUpperCase()} ${f('amount').trim()}.`;
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not save that.';
+  }
+}
+
+const rows = (await listInstruments()).map((i) => ({ inst: i, state: replay(i).state }));
+const limits = await getLimits();
+const recs = records(rows, limits);
+const { list: currencies } = await getCurrencies();
+const money = (v: string) => {
+  const [i, d = '00'] = v.split('.');
+  return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${d}`;
+};
+const stopped = recs.filter((r) => r.overdue.length > 0).length;
+---
+<Layout title="Issuers" noindex>
+  <section class="wrap etd">
+    <p class="crumb"><a href="/portal/admin/etd">← Electronic Trade Documents</a></p>
+    <h1>Issuers</h1>
+    <p class="lead">Who is issuing, how much they owe, and how they have paid.</p>
+
+    <div class="panel" style="margin-bottom:20px">
+      <h3>The three rules</h3>
+      <ol class="rules">
+        <li><strong>A limit for each person, in each currency.</strong> It caps what they can owe at any one time. Anyone without a limit set starts at <strong>{money(defaultLimit())}</strong> in each currency. A limit of 0 blocks them.</li>
+        <li><strong>A visible record.</strong> What they owe now, and how they have paid so far (below).</li>
+        <li><strong>An automatic stop.</strong> If any of their instruments is past its maturity date and unpaid, they cannot issue anything new until it is paid or cancelled.</li>
+      </ol>
+      <p class="note" style="margin:8px 0 0">
+        "Issuer" means the maker of a note or the drawer of a bill. People are matched by Companion No. if one was entered, otherwise by name,
+        so always enter the Companion No. when there is one.
+      </p>
+    </div>
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+    {message && <p role="status" class="msg ok">{message}</p>}
+
+    <div class="stats">
+      <div class="stat"><span class="n">{recs.length}</span><span class="l">Issuers</span></div>
+      <div class={`stat ${stopped ? 'warn' : ''}`}><span class="n">{stopped}</span><span class="l">Stopped (something overdue)</span></div>
+    </div>
+
+    {recs.length === 0 ? (
+      <div class="panel empty">Nobody has issued anything yet.</div>
+    ) : (
+      <div class="table-card">
+        <table class="stack">
+          <thead><tr><th>Issuer</th><th>Owes now / limit</th><th>Paid on time</th><th>Paid late</th><th>Cancelled</th><th>Status</th></tr></thead>
+          <tbody>
+            {recs.map((r) => {
+              const blocked = r.perCurrency.some((c) => Number(c.limit) === 0);
+              return (
+                <tr>
+                  <td data-label="Issuer"><strong>{r.name}</strong></td>
+                  <td data-label="Owes / limit">
+                    {r.perCurrency.length === 0 ? '—' : r.perCurrency.map((c) => (
+                      <div>{c.currency} {money(c.owed)} / {money(c.limit)}{c.explicit ? '' : ' (standard)'}</div>
+                    ))}
+                  </td>
+                  <td data-label="Paid on time">{r.paidOnTime}</td>
+                  <td data-label="Paid late">{r.paidLate}</td>
+                  <td data-label="Cancelled">{r.cancelled}</td>
+                  <td data-label="Status">
+                    {r.overdue.length > 0 ? (
+                      <>
+                        <span class="pill cancelled">Stopped</span>
+                        <div class="note" style="margin:6px 0 0">Overdue: {r.overdue.map((o, i) => (<>{i > 0 ? ', ' : ''}<a href={`/portal/admin/etd/${o.id}`}>{o.serial}</a></>))}</div>
+                      </>
+                    ) : blocked ? (
+                      <span class="pill cancelled">Blocked</span>
+                    ) : (
+                      <span class="pill paid">Can issue</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    <h2>Set a limit</h2>
+    <form method="post" class="f panel">
+      <label>Who
+        <input name="issuer" required list="issuers" placeholder="Companion No., or name if they have none" maxlength="120" />
+      </label>
+      <datalist id="issuers">
+        {recs.map((r) => <option value={r.key}>{r.name}</option>)}
+      </datalist>
+      <div class="row">
+        <label>Currency
+          <input name="currency" required maxlength="3" list="codes" placeholder="GBP" style="text-transform:uppercase" />
+        </label>
+        <label>Most they can owe at once
+          <input name="amount" required inputmode="decimal" placeholder="5000.00" />
+        </label>
+      </div>
+      <datalist id="codes">
+        {currencies.map((c) => <option value={c.code}>{c.name}</option>)}
+      </datalist>
+      <p class="note" style="margin:0">Enter 0 to stop someone issuing in that currency. A limit applies to that currency only.</p>
+      <button type="submit" class="btn">Save limit</button>
+    </form>
+  </section>
+</Layout>
+
+<style>
+  .rules { margin: 8px 0 0; padding-left: 1.2em; font-size: 0.9rem; }
+  .rules li { margin-bottom: 8px; max-width: 70ch; }
+</style>
