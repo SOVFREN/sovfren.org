@@ -6,6 +6,7 @@ import '../../../../styles/etd.css';
 import { requireAdmin } from '../../../../lib/admin';
 import { issue, listInstruments, replay, typeLabel, type InstrumentType } from '../../../../lib/etd';
 import { getSession } from '../../../../lib/session';
+import { findCurrency, getCurrencies } from '../../../../lib/currencies';
 import { getFeeQuote, issueWithFee, settleFee, unsettledFees } from '../../../../lib/etd-fees';
 
 // Admin-only register of Electronic Trade Documents: issue Promissory Notes
@@ -17,6 +18,10 @@ if (gate instanceof Response) return gate;
 const { profile } = gate;
 const session = await getSession(Astro);
 if (!session) return Astro.redirect('/portal/login');
+
+// The currencies a user can choose from (SovfHub's list, with a built-in fallback).
+const { list: currencies, live: currenciesLive } = await getCurrencies();
+const defaultCurrency = currencies.find((c) => c.default)?.code ?? currencies[0].code;
 
 let error: string | null = null;
 let message: string | null = null;
@@ -32,6 +37,8 @@ if (Astro.request.method === 'POST') {
   const f = (k: string) => String(form.get(k) ?? '');
   // Maturity: "on demand", a date, or a date and time (the time zone is sent separately).
   const payableOn = f('payableMode') === 'demand' ? 'on demand' : `${f('payableDate')}${f('payableTime') ? `T${f('payableTime')}` : ''}`;
+  const currencyCode = (f('currency') === '__other' ? f('currencyOther') : f('currency')).trim().toUpperCase();
+  const picked = findCurrency(currencies, currencyCode);
   const party = (p: string) => ({ name: f(`${p}Name`), ref: f(`${p}Ref`), lei: f(`${p}Lei`), bic: f(`${p}Bic`) });
   if (f('do') === 'settle') {
     try {
@@ -52,7 +59,9 @@ if (Astro.request.method === 'POST') {
       {
         type: f('type') as InstrumentType,
         amount: f('amount'),
-        currency: f('currency'),
+        currency: currencyCode,
+        currencySymbol: picked?.symbol,
+        currencySymbolAfter: picked?.symbolAfter,
         issuedAt: f('issuedAt'),
         placeOfIssue: f('placeOfIssue'),
         payableOn,
@@ -181,8 +190,17 @@ const money = (v: string) => {
         <p class="step-title"><span class="num">2</span> Amount and dates</p>
         <div class="row">
           <label>Amount<input name="amount" required inputmode="decimal" placeholder="12500.00" value={val('amount')} /></label>
-          <label>Currency<input name="currency" required maxlength="3" value={val('currency', 'GBP')} style="text-transform:uppercase" /></label>
+          <label>Currency
+            <select name="currency" required>
+              {currencies.map((c) => (
+                <option value={c.code} selected={val('currency', defaultCurrency) === c.code}>{c.symbol} · {c.code} · {c.name}</option>
+              ))}
+              <option value="__other" selected={val('currency') === '__other'}>Other (enter a code)…</option>
+            </select>
+          </label>
         </div>
+        <label id="currency-other" hidden>Currency code (3 letters)<input name="currencyOther" maxlength="3" value={val('currencyOther')} placeholder="ZAR" style="text-transform:uppercase" /></label>
+        {!currenciesLive && <p class="note" style="margin:0">Showing a standard list of currencies. SovfHub's own list could not be reached just now.</p>}
         <p class="words-preview" id="words-preview" aria-live="polite">
           <span class="label">Amount in words (sealed into the instrument)</span>
           <span id="words-text">Enter an amount to see it in words.</span>
@@ -282,6 +300,7 @@ const money = (v: string) => {
   import { isDayCount, maturityValue, parseCents, perDiem, type DayCount } from '../../../../lib/maturity';
   const form = document.getElementById('issue-form') as HTMLFormElement;
   const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
+  const curCode = () => (field('currency').value === '__other' ? field('currencyOther').value : field('currency').value);
   const fmt = (v: string) => {
     const [i, d] = v.split('.');
     return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${d}`;
@@ -291,7 +310,7 @@ const money = (v: string) => {
   const wordsText = document.getElementById('words-text')!;
   const showWords = () => {
     const amount = field('amount').value;
-    const w = amount.trim() ? amountInWords(amount, field('currency').value) : null;
+    const w = amount.trim() ? amountInWords(amount, curCode()) : null;
     wordsText.textContent = w ?? (amount.trim() ? 'Enter a valid amount, for example 12500.00' : 'Enter an amount to see it in words.');
     wordsText.classList.toggle('bad', !w && !!amount.trim());
   };
@@ -302,7 +321,7 @@ const money = (v: string) => {
   const showMaturity = () => {
     const rate = field('interestRate').value.trim();
     const amount = field('amount').value.trim();
-    const cur = field('currency').value.trim().toUpperCase();
+    const cur = curCode().trim().toUpperCase();
     if (!rate) {
       preview.hidden = true;
       return;
@@ -354,6 +373,10 @@ const money = (v: string) => {
     form.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
     form.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
 
+    const other = field('currency').value === '__other';
+    document.getElementById('currency-other')!.hidden = !other;
+    field('currencyOther').required = other;
+
     const dated = mode() === 'date';
     document.getElementById('date-fields')!.hidden = !dated;
     field('payableDate').required = dated;
@@ -365,8 +388,9 @@ const money = (v: string) => {
   form.querySelectorAll<HTMLInputElement>('input[name="type"], input[name="payableMode"]').forEach((r) => r.addEventListener('change', sync));
   form.addEventListener('input', (e) => {
     const n = (e.target as HTMLInputElement).name;
-    if (n === 'amount' || n === 'currency') showWords();
-    if (['amount', 'currency', 'issuedAt', 'interestRate', 'dayCount', 'payableDate'].includes(n)) showMaturity();
+    if (n === 'currency') sync();
+    if (n === 'amount' || n === 'currency' || n === 'currencyOther') showWords();
+    if (['amount', 'currency', 'currencyOther', 'issuedAt', 'interestRate', 'dayCount', 'payableDate'].includes(n)) showMaturity();
   });
 
   // Quick templates set the type and the maturity date relative to the issue date.

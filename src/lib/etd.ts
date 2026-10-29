@@ -64,6 +64,8 @@ export interface Terms {
   amount: string; // decimal string, e.g. "12500.00"
   amountWords?: string; // the same sum in words, as on a cheque; sealed with the terms (absent on early instruments)
   currency: string; // ISO 4217
+  currencySymbol?: string; // e.g. "£", sealed so the printed instrument never changes
+  currencySymbolAfter?: boolean; // symbol goes after the figure, e.g. 1,000.00 ₹
   issuedAt: string; // ISO date
   placeOfIssue: string;
   payableOn: string; // "on demand", an ISO date, or an ISO date and time "YYYY-MM-DDTHH:MM"
@@ -253,6 +255,8 @@ export interface IssueInput {
   type: InstrumentType;
   amount: string;
   currency: string;
+  currencySymbol?: string;
+  currencySymbolAfter?: boolean;
   issuedAt: string;
   placeOfIssue: string;
   payableOn: string;
@@ -340,6 +344,8 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
   if (!/^\d{1,15}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) throw new Error('Enter a valid amount (e.g. 12500.00).');
   const currency = input.currency.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Currency must be a 3-letter code.');
+  const symbol = (input.currencySymbol ?? '').trim();
+  if (symbol && (symbol.length > 8 || /[<>&"]/.test(symbol))) throw new Error('That currency symbol is not valid.');
   if (!isoDate(input.issuedAt)) throw new Error('Enter a valid issue date.');
   const payableOn = input.payableOn.trim().toLowerCase() === 'on demand' ? 'on demand' : input.payableOn.trim();
   const when = splitPayable(payableOn);
@@ -385,6 +391,7 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     nonce: randomBytes(16).toString('hex'),
     amount,
     currency,
+    ...(symbol ? { currencySymbol: symbol, currencySymbolAfter: !!input.currencySymbolAfter } : {}),
     amountWords: amountInWords(amount, currency) ?? undefined,
     issuedAt: input.issuedAt,
     placeOfIssue: place,

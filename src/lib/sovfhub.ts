@@ -186,3 +186,16 @@ export function etdFeeCapture(accessToken: string, reference: string, instrument
 export function etdFeeRefund(accessToken: string, reference: string) {
   return sovfhubUserPost<EtdFeeCharge>('etd_fee_refund', accessToken, { reference });
 }
+
+// Currencies users can choose for Electronic Trade Documents (SovfHub's system_currencies).
+export interface SovfhubCurrency {
+  code: string;
+  name: string;
+  symbol: string;
+  symbolAfter: boolean;
+  default: boolean;
+}
+
+export function listCurrencies() {
+  return sovfhubGet<{ currencies: SovfhubCurrency[] }>('etd_currencies');
+}

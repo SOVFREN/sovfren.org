@@ -30,6 +30,20 @@ const UNITS: Record<string, Unit> = {
   INR: { major: ['rupee', 'rupees'], minor: ['paisa', 'paise'] },
   AED: { major: ['dirham', 'dirhams'], minor: ['fils', 'fils'] },
   JPY: { major: ['yen', 'yen'] },
+  BRL: { major: ['real', 'reais'], minor: ['centavo', 'centavos'] },
+  CZK: { major: ['koruna', 'koruny'], minor: ['haler', 'haleru'] },
+  DKK: { major: ['krone', 'kroner'], minor: ['ore', 'ore'] },
+  NOK: { major: ['krone', 'kroner'], minor: ['ore', 'ore'] },
+  SEK: { major: ['krona', 'kronor'], minor: ['ore', 'ore'] },
+  HUF: { major: ['forint', 'forint'] },
+  ILS: { major: ['shekel', 'shekels'], minor: ['agora', 'agorot'] },
+  MYR: { major: ['ringgit', 'ringgit'], minor: ['sen', 'sen'] },
+  MXN: { major: ['peso', 'pesos'], minor: ['centavo', 'centavos'] },
+  PHP: { major: ['peso', 'pesos'], minor: ['centavo', 'centavos'] },
+  PLN: { major: ['zloty', 'zlotys'], minor: ['grosz', 'groszy'] },
+  RUB: { major: ['ruble', 'rubles'], minor: ['kopek', 'kopeks'] },
+  THB: { major: ['baht', 'baht'], minor: ['satang', 'satang'] },
+  TRY: { major: ['lira', 'lira'], minor: ['kurus', 'kurus'] },
 };
 
 function underThousand(n: number): string {

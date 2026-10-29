@@ -45,6 +45,12 @@ const accrued =
 const daily = t.interestRate && onDemand ? perDiem(t.amount, t.interestRate, dayCount) : null;
 const endorsements = inst.events.filter((e) => e.type === 'transfer');
 const sum = `${t.currency} ${money(t.amount)}`;
+// With a symbol: "£10,000.00" (or "10,000.00 ₹"); the code is always shown alongside, since "$" is many currencies.
+const figure = t.currencySymbol
+  ? t.currencySymbolAfter
+    ? `${money(t.amount)} ${t.currencySymbol}`
+    : `${t.currencySymbol}${money(t.amount)}`
+  : null;
 // The words sealed at issue; early instruments without them get the same wording computed on the fly.
 const words = t.amountWords ?? amountInWords(t.amount, t.currency);
 const payee = state?.holder ?? t.payee;
@@ -66,8 +72,10 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
     </header>
 
     <div class="amount">
-      <span class="label">The sum of</span>
-      <span class="fig"><span class="cur">{t.currency}</span> {money(t.amount)}</span>
+      <span class="label">The sum of{figure ? ` (${t.currency})` : ''}</span>
+      {figure
+        ? <span class="fig">{figure}</span>
+        : <span class="fig"><span class="cur">{t.currency}</span> {money(t.amount)}</span>}
       {words && <span class="words"><span class="label">Amount in words</span>{words}</span>}
     </div>
 
