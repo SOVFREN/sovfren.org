@@ -36,6 +36,7 @@ import { mkdir, readFile, readdir, rename, writeFile, chmod } from 'node:fs/prom
 import path from 'node:path';
 import { identifierChecks, validBic, validLei, type IdentifierKey } from './identifiers';
 import { amountInWords } from './amount-words';
+import { formatRate, isDayCount, maturityValue, parseRate, splitPayable, type DayCount } from './maturity';
 
 export type InstrumentType = 'promissory_note' | 'bill_of_exchange';
 export type EventType = 'issue' | 'transfer' | 'deliver' | 'accept' | 'pay' | 'cancel' | 'rekey' | 'recover';
@@ -65,13 +66,20 @@ export interface Terms {
   currency: string; // ISO 4217
   issuedAt: string; // ISO date
   placeOfIssue: string;
-  payableOn: string; // ISO date or "on demand"
+  payableOn: string; // "on demand", an ISO date, or an ISO date and time "YYYY-MM-DDTHH:MM"
+  payableTz?: string; // IANA time zone the time (if any) is in, e.g. "Europe/London"
   payee: Party; // payable to the order of
   payeeKey: string; // payee's Ed25519 public key (raw, base64): only they can endorse onward
   maker?: Party; // promissory note: the promisor
   drawer?: Party; // bill of exchange: who orders payment
   drawee?: Party; // bill of exchange: who must pay
-  interest?: string;
+  interest?: string; // wording of the interest terms
+  interestRate?: string; // % per annum, simple interest on whole days
+  dayCount?: DayCount;
+  interestDays?: number; // fixed-maturity instruments only: days from issue to maturity
+  interestAtMaturity?: string; // interest due at maturity, sealed
+  maturityValue?: string; // principal + interest at maturity, sealed
+  maturityValueWords?: string; // the same, in words
   governingLaw?: string;
   identifiers?: Identifiers;
   clauses?: string;
@@ -248,6 +256,9 @@ export interface IssueInput {
   issuedAt: string;
   placeOfIssue: string;
   payableOn: string;
+  payableTz?: string;
+  interestRate?: string;
+  dayCount?: string;
   payee: Party;
   payeeKey: string;
   maker?: Party;
@@ -331,8 +342,39 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Currency must be a 3-letter code.');
   if (!isoDate(input.issuedAt)) throw new Error('Enter a valid issue date.');
   const payableOn = input.payableOn.trim().toLowerCase() === 'on demand' ? 'on demand' : input.payableOn.trim();
-  if (payableOn !== 'on demand' && !isoDate(payableOn)) throw new Error('Payable on must be a date or "on demand".');
-  if (payableOn !== 'on demand' && payableOn < input.issuedAt) throw new Error('Payable on cannot be before the issue date.');
+  const when = splitPayable(payableOn);
+  let payableTz: string | undefined;
+  if (!when.onDemand) {
+    if (!when.date || !isoDate(when.date)) throw new Error('Choose "on demand" or a maturity date.');
+    if (when.date < input.issuedAt) throw new Error('The maturity date cannot be before the issue date.');
+    if (when.time) {
+      const [hh, mm] = when.time.split(':').map(Number);
+      if (hh > 23 || mm > 59) throw new Error('Enter a valid maturity time.');
+      payableTz = (input.payableTz ?? '').trim();
+      if (!payableTz) throw new Error('Choose the time zone for the maturity time.');
+      try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: payableTz });
+      } catch {
+        throw new Error('That time zone is not recognised (use a name like Europe/London).');
+      }
+    }
+  }
+  // Structured interest, so the value at maturity can be calculated exactly and sealed.
+  let rate: string | undefined;
+  let dayCount: DayCount | undefined;
+  let maturity: ReturnType<typeof maturityValue> = null;
+  if ((input.interestRate ?? '').trim()) {
+    const scaled = parseRate(input.interestRate!);
+    if (scaled === null) throw new Error('Interest rate must be a percentage above 0 and up to 100, with up to 4 decimal places.');
+    rate = formatRate(scaled);
+    const dc = (input.dayCount ?? 'ACT/365').trim();
+    if (!isDayCount(dc)) throw new Error('Choose a day-count basis.');
+    dayCount = dc;
+    if (!when.onDemand) maturity = maturityValue(amount, rate, dayCount, input.issuedAt, when.date!);
+  }
+  const interestText = rate
+    ? `${rate}% per annum simple interest from the issue date, ${dayCount}${input.interest?.trim() ? `. ${input.interest.trim()}` : ''}`
+    : input.interest?.trim();
   const place = input.placeOfIssue.trim();
   if (!place || place.length > 120) throw new Error('Enter the place of issue.');
 
@@ -347,12 +389,22 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     issuedAt: input.issuedAt,
     placeOfIssue: place,
     payableOn,
+    ...(payableTz ? { payableTz } : {}),
     payee: cleanParty(input.payee, 'Payee'),
     payeeKey: cleanKey(input.payeeKey, 'Payee public key'),
     ...(type === 'promissory_note'
       ? { maker: cleanParty(input.maker, 'Maker') }
       : { drawer: cleanParty(input.drawer, 'Drawer'), drawee: cleanParty(input.drawee, 'Drawee') }),
-    ...(input.interest?.trim() ? { interest: input.interest.trim().slice(0, 120) } : {}),
+    ...(interestText ? { interest: interestText.slice(0, 240) } : {}),
+    ...(rate ? { interestRate: rate, dayCount } : {}),
+    ...(maturity
+      ? {
+          interestDays: maturity.days,
+          interestAtMaturity: maturity.interest,
+          maturityValue: maturity.total,
+          maturityValueWords: amountInWords(maturity.total, currency) ?? undefined,
+        }
+      : {}),
     ...(input.governingLaw?.trim() ? { governingLaw: input.governingLaw.trim().slice(0, 120) } : {}),
     ...(cleanIdentifiers(input.identifiers) ? { identifiers: cleanIdentifiers(input.identifiers) } : {}),
     ...(input.clauses?.trim() ? { clauses: input.clauses.trim().slice(0, 4000) } : {}),
@@ -578,10 +630,19 @@ export async function exportStandard(inst: Instrument, baseUrl: string) {
       ...t.identifiers,
       faceAmount: { value: t.amount, currency: t.currency, inWords: t.amountWords ?? amountInWords(t.amount, t.currency) ?? undefined },
       issueDate: t.issuedAt,
-      maturity: t.payableOn === 'on demand' ? { onDemand: true } : { date: t.payableOn },
+      maturity: (() => {
+        const w = splitPayable(t.payableOn);
+        return w.onDemand ? { onDemand: true } : { date: w.date, time: w.time, timeZone: t.payableTz };
+      })(),
       placeOfIssue: t.placeOfIssue,
       governingLaw: t.governingLaw,
       interest: t.interest,
+      interestTerms: t.interestRate
+        ? { ratePercentPerAnnum: t.interestRate, dayCount: t.dayCount, method: 'simple', accruesFrom: t.issuedAt }
+        : undefined,
+      valueAtMaturity: t.maturityValue
+        ? { value: t.maturityValue, inWords: t.maturityValueWords, interest: t.interestAtMaturity, days: t.interestDays, currency: t.currency }
+        : undefined,
     },
     parties: {
       maker: t.maker,

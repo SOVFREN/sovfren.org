@@ -30,6 +30,8 @@ if (Astro.request.method === 'POST') {
     if (typeof v === 'string') posted[k] = v;
   });
   const f = (k: string) => String(form.get(k) ?? '');
+  // Maturity: "on demand", a date, or a date and time (the time zone is sent separately).
+  const payableOn = f('payableMode') === 'demand' ? 'on demand' : `${f('payableDate')}${f('payableTime') ? `T${f('payableTime')}` : ''}`;
   const party = (p: string) => ({ name: f(`${p}Name`), ref: f(`${p}Ref`), lei: f(`${p}Lei`), bic: f(`${p}Bic`) });
   if (f('do') === 'settle') {
     try {
@@ -53,7 +55,10 @@ if (Astro.request.method === 'POST') {
         currency: f('currency'),
         issuedAt: f('issuedAt'),
         placeOfIssue: f('placeOfIssue'),
-        payableOn: f('payableOn'),
+        payableOn,
+        payableTz: f('payableTz'),
+        interestRate: f('interestRate'),
+        dayCount: f('dayCount'),
         payee: party('payee'),
         payeeKey: f('payeeKey'),
         maker: party('maker'),
@@ -182,10 +187,36 @@ const money = (v: string) => {
           <span class="label">Amount in words (sealed into the instrument)</span>
           <span id="words-text">Enter an amount to see it in words.</span>
         </p>
-        <div class="row">
-          <label>Issue date<input type="date" name="issuedAt" required value={val('issuedAt', today)} /></label>
-          <label>Payable on (date or "on demand")<input name="payableOn" required value={val('payableOn', 'on demand')} /></label>
-        </div>
+        <label>Issue date<input type="date" name="issuedAt" required value={val('issuedAt', today)} /></label>
+        <fieldset>
+          <legend>When is it payable?</legend>
+          <div class="row">
+            <label class="chk"><input type="radio" name="payableMode" value="demand" checked={val('payableMode', 'demand') === 'demand'} /> On demand</label>
+            <label class="chk"><input type="radio" name="payableMode" value="date" checked={val('payableMode') === 'date'} /> On a set date</label>
+          </div>
+          <div class="row" id="date-fields" hidden>
+            <label>Maturity date<input type="date" name="payableDate" value={val('payableDate')} /></label>
+            <label>Time (optional)<input type="time" name="payableTime" value={val('payableTime')} /></label>
+            <label>Time zone<input name="payableTz" list="tzlist" value={val('payableTz')} placeholder="Europe/London" /></label>
+          </div>
+          <datalist id="tzlist">
+            {['Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin', 'UTC', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'].map((z) => <option value={z} />)}
+          </datalist>
+        </fieldset>
+        <fieldset>
+          <legend>Interest (optional)</legend>
+          <div class="row">
+            <label>Rate, % per year<input name="interestRate" inputmode="decimal" placeholder="4.5" value={val('interestRate')} /></label>
+            <label>Day count
+              <select name="dayCount">
+                <option value="ACT/365" selected={val('dayCount', 'ACT/365') === 'ACT/365'}>Actual/365 (UK standard)</option>
+                <option value="ACT/360" selected={val('dayCount') === 'ACT/360'}>Actual/360</option>
+              </select>
+            </label>
+          </div>
+          <p class="calc-preview" id="maturity-preview" aria-live="polite" hidden></p>
+          <p class="note" style="margin:0">Simple interest on whole days from the issue date, rounded to the nearest penny. The time of day does not affect interest.</p>
+        </fieldset>
         <label>Place of issue<input name="placeOfIssue" required maxlength="120" value={val('placeOfIssue')} /></label>
       </div>
 
@@ -207,16 +238,16 @@ const money = (v: string) => {
           <fieldset><legend>Payee (pay to the order of)</legend>
             <div class="row"><label>Name<input name="payeeName" required maxlength="120" value={val('payeeName')} /></label><label>Companion No. / ref<input name="payeeRef" maxlength="60" value={val('payeeRef')} /></label></div>
             <div class="row"><label>LEI (optional)<input name="payeeLei" maxlength="20" value={val('payeeLei')} /></label><label>BIC (optional)<input name="payeeBic" maxlength="11" value={val('payeeBic')} /></label></div>
-            <label>Payee public key (from their <a href="/portal/admin/etd/keys">holder key</a>)<textarea name="payeeKey" rows="2" required class="mono">{val('payeeKey')}</textarea></label>
+            <label><span>Payee public key (from their <a href="/portal/admin/etd/keys">holder key</a>)</span><textarea name="payeeKey" rows="2" required class="mono">{val('payeeKey')}</textarea></label>
           </fieldset>
         </div>
       </div>
 
       <details class="more" open={!!(posted.interest || posted.governingLaw || posted.clauses || posted.isin || posted.sedol || posted.cusip || posted.cfi)}>
-        <summary>Optional details: interest, governing law, identifiers, clauses</summary>
+        <summary>Optional details: other interest wording, governing law, identifiers, clauses</summary>
         <div class="f">
           <div class="row">
-            <label>Interest<input name="interest" maxlength="120" value={val('interest')} /></label>
+            <label>Other interest wording (optional)<input name="interest" maxlength="120" value={val('interest')} /></label>
             <label>Governing law<input name="governingLaw" maxlength="120" value={val('governingLaw')} /></label>
           </div>
           <fieldset><legend>Market identifiers (assigned by others, validated here)</legend>
@@ -248,24 +279,73 @@ const money = (v: string) => {
 
 <script>
   import { amountInWords } from '../../../../lib/amount-words';
+  import { isDayCount, maturityValue, parseCents, perDiem, type DayCount } from '../../../../lib/maturity';
   const form = document.getElementById('issue-form') as HTMLFormElement;
+  const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
+  const fmt = (v: string) => {
+    const [i, d] = v.split('.');
+    return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${d}`;
+  };
 
   // Live "words" line, like the line on a cheque. The server generates the same words when it issues.
   const wordsText = document.getElementById('words-text')!;
   const showWords = () => {
-    const amount = (form.elements.namedItem('amount') as HTMLInputElement).value;
-    const currency = (form.elements.namedItem('currency') as HTMLInputElement).value;
-    const w = amount.trim() ? amountInWords(amount, currency) : null;
+    const amount = field('amount').value;
+    const w = amount.trim() ? amountInWords(amount, field('currency').value) : null;
     wordsText.textContent = w ?? (amount.trim() ? 'Enter a valid amount, for example 12500.00' : 'Enter an amount to see it in words.');
     wordsText.classList.toggle('bad', !w && !!amount.trim());
   };
-  form.addEventListener('input', (e) => {
-    const n = (e.target as HTMLInputElement).name;
-    if (n === 'amount' || n === 'currency') showWords();
-  });
-  showWords();
-  const radios = form.querySelectorAll<HTMLInputElement>('input[name="type"]');
-  const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
+
+  // Live value at maturity, from the same calculation the server seals into the instrument.
+  const preview = document.getElementById('maturity-preview')!;
+  const mode = () => form.querySelector<HTMLInputElement>('input[name="payableMode"]:checked')?.value ?? 'demand';
+  const showMaturity = () => {
+    const rate = field('interestRate').value.trim();
+    const amount = field('amount').value.trim();
+    const cur = field('currency').value.trim().toUpperCase();
+    if (!rate) {
+      preview.hidden = true;
+      return;
+    }
+    preview.hidden = false;
+    const dcValue = field('dayCount').value;
+    const dc: DayCount = isDayCount(dcValue) ? dcValue : 'ACT/365';
+    if (parseCents(amount) === null) {
+      preview.textContent = 'Enter the amount first.';
+      return;
+    }
+    if (mode() === 'demand') {
+      const day = perDiem(amount, rate, dc);
+      preview.textContent = day
+        ? `No fixed maturity. Interest builds up at about ${cur} ${fmt(day)} a day from the issue date.`
+        : 'Enter a rate between 0 and 100, for example 4.5.';
+      return;
+    }
+    const to = field('payableDate').value;
+    if (!to) {
+      preview.textContent = 'Choose the maturity date to see the value at maturity.';
+      return;
+    }
+    if (to < field('issuedAt').value) {
+      preview.textContent = 'The maturity date is before the issue date.';
+      return;
+    }
+    const m = maturityValue(amount, rate, dc, field('issuedAt').value, to);
+    if (!m) {
+      preview.textContent = 'Enter a rate between 0 and 100, for example 4.5.';
+      return;
+    }
+    const words = amountInWords(m.total, cur);
+    preview.replaceChildren();
+    const line = document.createElement('span');
+    line.textContent = `Interest ${cur} ${fmt(m.interest)} over ${m.days} days. Value at maturity: ${cur} ${fmt(m.total)}`;
+    preview.append(line);
+    if (words) {
+      const w = document.createElement('em');
+      w.textContent = words;
+      preview.append(w);
+    }
+  };
 
   const sync = () => {
     const bill = form.querySelector<HTMLInputElement>('input[name="type"]:checked')?.value === 'bill_of_exchange';
@@ -273,24 +353,38 @@ const money = (v: string) => {
     form.querySelectorAll<HTMLElement>('.only-note').forEach((el) => (el.hidden = bill));
     form.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
     form.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
-  };
-  radios.forEach((r) => r.addEventListener('change', sync));
 
-  // Quick templates set the type and the payable-on date relative to the issue date.
+    const dated = mode() === 'date';
+    document.getElementById('date-fields')!.hidden = !dated;
+    field('payableDate').required = dated;
+    if (dated && !field('payableTz').value) {
+      field('payableTz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/London';
+    }
+    showMaturity();
+  };
+  form.querySelectorAll<HTMLInputElement>('input[name="type"], input[name="payableMode"]').forEach((r) => r.addEventListener('change', sync));
+  form.addEventListener('input', (e) => {
+    const n = (e.target as HTMLInputElement).name;
+    if (n === 'amount' || n === 'currency') showWords();
+    if (['amount', 'currency', 'issuedAt', 'interestRate', 'dayCount', 'payableDate'].includes(n)) showMaturity();
+  });
+
+  // Quick templates set the type and the maturity date relative to the issue date.
   form.querySelectorAll<HTMLButtonElement>('.chip').forEach((chip) =>
     chip.addEventListener('click', () => {
-      const radio = form.querySelector<HTMLInputElement>(`input[name="type"][value="${chip.dataset.type}"]`)!;
-      radio.checked = true;
+      form.querySelector<HTMLInputElement>(`input[name="type"][value="${chip.dataset.type}"]`)!.checked = true;
       const days = Number(chip.dataset.days);
       if (days === 0) {
-        field('payableOn').value = 'on demand';
+        form.querySelector<HTMLInputElement>('input[name="payableMode"][value="demand"]')!.checked = true;
       } else {
+        form.querySelector<HTMLInputElement>('input[name="payableMode"][value="date"]')!.checked = true;
         const base = field('issuedAt').value ? new Date(`${field('issuedAt').value}T00:00:00Z`) : new Date();
         base.setUTCDate(base.getUTCDate() + days);
-        field('payableOn').value = base.toISOString().slice(0, 10);
+        field('payableDate').value = base.toISOString().slice(0, 10);
       }
       sync();
     }),
   );
+  showWords();
   sync();
 </script>

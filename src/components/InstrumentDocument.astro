@@ -5,6 +5,7 @@
 // in the registry is what governs; this is only how it is presented.
 import type { Instrument, State, Party } from '../lib/etd';
 import { amountInWords } from '../lib/amount-words';
+import { maturityValue, perDiem, splitPayable } from '../lib/maturity';
 
 interface Props {
   inst: Instrument;
@@ -28,8 +29,21 @@ const longDate = (d: string) =>
     ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
     : d;
 
-const onDemand = t.payableOn === 'on demand';
-const when = onDemand ? 'On demand' : `On ${longDate(t.payableOn)}`;
+const pay = splitPayable(t.payableOn);
+const onDemand = pay.onDemand;
+const payText = onDemand
+  ? 'On demand'
+  : `${longDate(pay.date ?? t.payableOn)}${pay.time ? ` at ${pay.time}${t.payableTz ? ` (${t.payableTz})` : ''}` : ''}`;
+const when = onDemand ? 'On demand' : `On ${payText}`;
+const dayCount = t.dayCount ?? 'ACT/365';
+// Instruments with no fixed maturity: indicative value today (interest has been building since issue).
+const todayStr = new Date().toISOString().slice(0, 10);
+const accrued =
+  t.interestRate && onDemand && state?.status === 'active' && todayStr >= t.issuedAt
+    ? maturityValue(t.amount, t.interestRate, dayCount, t.issuedAt, todayStr)
+    : null;
+const daily = t.interestRate && onDemand ? perDiem(t.amount, t.interestRate, dayCount) : null;
+const endorsements = inst.events.filter((e) => e.type === 'transfer');
 const sum = `${t.currency} ${money(t.amount)}`;
 // The words sealed at issue; early instruments without them get the same wording computed on the fly.
 const words = t.amountWords ?? amountInWords(t.amount, t.currency);
@@ -81,16 +95,49 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
           <div><dt>Drawee {state?.accepted ? '(accepted)' : ''}</dt><dd>{t.drawee?.name}<small>{sub(t.drawee)}</small></dd></div>
         </>
       )}
-      <div><dt>Payee</dt><dd>{t.payee.name}<small>{sub(t.payee)}</small></dd></div>
+      <div><dt>Original payee</dt><dd>{t.payee.name}<small>{sub(t.payee)}</small></dd></div>
     </dl>
 
     <dl class="terms">
       <div><dt>Issued</dt><dd>{longDate(t.issuedAt)}</dd></div>
       <div><dt>Place</dt><dd>{t.placeOfIssue}</dd></div>
-      <div><dt>Payable</dt><dd>{onDemand ? 'On demand' : longDate(t.payableOn)}</dd></div>
+      <div><dt>Payable</dt><dd>{payText}</dd></div>
       {t.governingLaw && <div><dt>Governing law</dt><dd>{t.governingLaw}</dd></div>}
       {t.identifiers && Object.entries(t.identifiers).map(([k, v]) => <div><dt>{k.toUpperCase()}</dt><dd class="mono">{v}</dd></div>)}
     </dl>
+
+    {t.interestRate && (
+      <section class="value">
+        <span class="label">{t.maturityValue ? 'Value at maturity' : 'Interest'}</span>
+        {t.maturityValue ? (
+          <>
+            <dl class="calc">
+              <div><dt>Principal</dt><dd>{t.currency} {money(t.amount)}</dd></div>
+              <div><dt>Interest at {t.interestRate}% a year · {t.interestDays} days · {dayCount}</dt><dd>{t.currency} {money(t.interestAtMaturity ?? '0')}</dd></div>
+              <div class="total"><dt>Due at maturity</dt><dd>{t.currency} {money(t.maturityValue)}</dd></div>
+            </dl>
+            {t.maturityValueWords && <p class="vwords">{t.maturityValueWords}</p>}
+          </>
+        ) : (
+          <p class="accrue">
+            Interest accrues at {t.interestRate}% a year ({dayCount}, simple) from the issue date until paid{daily ? `, about ${t.currency} ${money(daily)} a day` : null}.
+            {accrued && accrued.days > 0 && <> Indicative value today: <strong>{t.currency} {money(accrued.total)}</strong> ({accrued.days} days). The amount due is calculated on the day of payment.</>}
+          </p>
+        )}
+      </section>
+    )}
+
+    {endorsements.length > 0 && (
+      <section class="endorse">
+        <span class="label">Endorsements</span>
+        <ol>
+          {endorsements.map((e) => {
+            const d = e.data as { from: Party; to: Party };
+            return <li><strong>{d.from.name}</strong> to <strong>{d.to.name}</strong><small>{e.at.slice(0, 10)} · signed by the holder's key</small></li>;
+          })}
+        </ol>
+      </section>
+    )}
 
     {t.clauses && <p class="clauses"><span class="label">Additional terms</span>{t.clauses}</p>}
 
@@ -231,6 +278,18 @@ const stamp = !verified ? 'Do not rely' : status === 'paid' ? 'Paid' : status ==
   .parties { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
   .terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 14px 16px; padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
   .terms dd { font-weight: 500; font-size: 0.9rem; }
+  .value, .endorse { padding: 16px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); }
+  .calc { display: grid; gap: 6px; max-width: 460px; }
+  .calc > div { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+  .calc dt { margin: 0; font: 400 0.8rem var(--sf-font-body); letter-spacing: 0; text-transform: none; color: #3b4658; opacity: 1; }
+  .calc dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .calc .total { border-top: 1px solid var(--accent); padding-top: 8px; margin-top: 4px; }
+  .calc .total dt { font-weight: 600; color: var(--accent); }
+  .calc .total dd { font-family: var(--sf-font-display); font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+  .vwords { margin: 8px 0 0; font-family: var(--sf-font-display); font-style: italic; font-weight: 600; font-size: 1.1rem; color: var(--accent); }
+  .accrue { margin: 0; font-size: 0.88rem; line-height: 1.5; }
+  .endorse ol { margin: 0; padding-left: 1.2em; font-size: 0.9rem; }
+  .endorse li { margin-bottom: 4px; }
   .clauses { white-space: pre-wrap; font-size: 0.88rem; padding: 14px 0; border-top: 1px solid rgba(var(--accent-rgb), 0.15); margin: 0; }
 
   /* footer */
