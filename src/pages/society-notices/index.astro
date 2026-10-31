@@ -12,7 +12,7 @@ try {
   const result = await listPublicNotices(page);
   notices = result.notices;
 } catch {
-  error = 'Could not load Public Notices right now.';
+  error = 'Could not load Society Notices right now.';
 }
 
 function excerpt(text: string, length = 180): string {
@@ -21,11 +21,11 @@ function excerpt(text: string, length = 180): string {
 }
 ---
 <Layout
-  title="Public Notices"
+  title="Society Notices"
   description="Notices posted by Companions of the Sovfren Society."
 >
   <section class="card">
-    <h1>Public Notices</h1>
+    <h1>Society Notices</h1>
     <p>Notices posted by Companions of the Sovfren Society.</p>
 
     {error && <p role="alert">{error}</p>}
@@ -35,7 +35,7 @@ function excerpt(text: string, length = 180): string {
     <ul class="notice-list">
       {notices.map((notice) => (
         <li>
-          <a class="notice-title" href={`/public-notices/${notice.id}`}>{notice.title}</a>
+          <a class="notice-title" href={`/society-notices/${notice.id}`}>{notice.title}</a>
           <p class="notice-meta">
             {notice.authorName}
             {notice.authorCompanionNumber && <> &middot; {notice.authorCompanionNumber}</>}
@@ -47,8 +47,8 @@ function excerpt(text: string, length = 180): string {
     </ul>
 
     <div class="pagination">
-      {page > 1 && <a href={`/public-notices?page=${page - 1}`}>&larr; Newer</a>}
-      {notices.length === 20 && <a href={`/public-notices?page=${page + 1}`}>Older &rarr;</a>}
+      {page > 1 && <a href={`/society-notices?page=${page - 1}`}>&larr; Newer</a>}
+      {notices.length === 20 && <a href={`/society-notices?page=${page + 1}`}>Older &rarr;</a>}
     </div>
   </section>
 </Layout>

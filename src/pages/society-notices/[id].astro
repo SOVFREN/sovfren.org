@@ -22,8 +22,8 @@ if (!Number.isFinite(noticeId)) {
 }
 ---
 <Layout
-  title={notice ? notice.title : 'Public Notice'}
-  description={notice ? notice.content.slice(0, 160).trim() : 'A public notice posted by a Companion of the Sovfren Society.'}
+  title={notice ? notice.title : 'Society Notice'}
+  description={notice ? notice.content.slice(0, 160).trim() : 'A Society Notice posted by a Companion of the Sovfren Society.'}
 >
   <section class="card">
     {error && <p role="alert">{error}</p>}
@@ -42,7 +42,7 @@ if (!Number.isFinite(noticeId)) {
       </>
     )}
 
-    <a class="back-link" href="/public-notices">&larr; All Public Notices</a>
+    <a class="back-link" href="/society-notices">&larr; All Society Notices</a>
   </section>
 </Layout>
 

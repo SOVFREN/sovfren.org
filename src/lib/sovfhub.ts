@@ -39,7 +39,7 @@ async function sovfhubPost<T>(action: string, params: Record<string, string> = {
   return handle<T>(res, action);
 }
 
-// Public Notices mutations act on behalf of a specific companion, so they
+// Society Notices mutations act on behalf of a specific companion, so they
 // authenticate with that companion's own SSO access token (from their
 // portal session), not the server's static API_KEY.
 async function sovfhubUserGet<T>(action: string, accessToken: string, params: Record<string, string> = {}): Promise<T> {
