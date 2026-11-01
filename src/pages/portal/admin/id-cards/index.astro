@@ -90,7 +90,7 @@ const fmt = (iso?: string) => (iso ? new Date(iso).toISOString().slice(0, 10) : 
     <h2>Grant directly</h2>
     <p class="note">For a Companion who has already shown you their Declaration of Life and has no application.</p>
     <form method="post" class="grant-form">
-      <label>Companion Number<input name="companionNumber" required placeholder="SovfCom00000001" /></label>
+      <label>Companion Number<input name="companionNumber" required placeholder="SovfCom0000####" /></label>
       <label>Title<input name="title" required value="Consul-General" maxlength="60" /></label>
       <label>AOL (apostille number)<input name="aol" required maxlength="60" /></label>
       <label>Registered Post reference<input name="postRef" required maxlength="20" placeholder="NZ 1416 6870 7GB" /></label>
