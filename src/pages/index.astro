@@ -7,33 +7,6 @@ const pillars = [
   ['Honour', 'Acting truthfully, faithfully and with integrity.'],
   ['Good Conscience', 'Endeavouring to do what is fair, responsible and morally right.'],
 ];
-
-const offerings = [
-  {
-    title: 'Register of Companions',
-    text: "Look up a Companion's Proof of Life record by Companion Number.",
-    href: '/register',
-    cta: 'Search the Register →',
-  },
-  {
-    title: 'Property Register',
-    text: 'Search property held and administered under the Society’s Stewardship.',
-    href: '/property',
-    cta: 'Search Property →',
-  },
-  {
-    title: 'Society Notices',
-    text: 'Read notices posted by Companions of the Sovfren Society.',
-    href: '/society-notices',
-    cta: 'View Notices →',
-  },
-  {
-    title: 'Companion Portal',
-    text: 'Companions sign in to manage their notices and constitutional records.',
-    href: '/portal',
-    cta: 'Open the Portal →',
-  },
-];
 ---
 <Layout
   title="Sovfren Society — Peace is Power"
@@ -85,22 +58,6 @@ const offerings = [
     </div>
     <div class="discover-image">
       <img src="/images/meditate.webp" alt="" />
-    </div>
-  </section>
-
-  <section class="stack-section">
-    <div class="section-heading">
-      <p class="kicker">Constitutional Life</p>
-      <h2>Explore the Society</h2>
-    </div>
-    <div class="info-grid" style="--info-grid-cols: 4;">
-      {offerings.map((item) => (
-        <a class="info-card is-link" href={item.href}>
-          <h3>{item.title}</h3>
-          <p>{item.text}</p>
-          <span class="info-card-cta">{item.cta}</span>
-        </a>
-      ))}
     </div>
   </section>
 
