@@ -1,24 +1,64 @@
 ---
 import Layout from '../layouts/Layout.astro';
 
+// 24x24 line icons, rendered inline so they inherit the page colours.
+const icons: Record<string, string> = {
+  unity: '<circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+  light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 2.7 4.5 5.7 4.5 9S15 18.3 12 21c-3-2.7-4.5-5.7-4.5-9S9 5.7 12 3z"/>',
+  message: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  book: '<path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2z"/><path d="M22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/>',
+  people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4.5 6"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+  notice: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  idcard: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0M14 10h4M14 14h4"/>',
+  peace: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18M12 12l-6.4 6.4M12 12l6.4 6.4"/>',
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  honour: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 21l5-3 5 3-1.5-7.5"/>',
+  scales: '<path d="M12 3v18M7 21h10M5 7h14"/><path d="M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/>',
+};
+
 const reasons = [
   [
     'Reduce Division',
     'Too much of the online world rewards outrage and sorts people into opposing camps. Sovfhub is built around fellowship and the peaceful resolution of differences, gathering people around what they share rather than what divides them.',
+    'unity',
   ],
   [
     'Counter Misinformation',
     'Trust grows where people can be identified and records are kept openly. On Sovfhub, Companions are listed on the Society’s Register, founders answer for their initiatives, and notices are published in the open.',
+    'shield',
   ],
   [
     'Promote Truth & Good Conscience',
     'Honour means acting truthfully, faithfully and with integrity. Sovfhub gives those values a working home, where education, open communication and the Code of Honour set the standard for how Companions treat one another.',
+    'light',
   ],
   [
     'Advance Humanity & Shape its Values',
     'Every Self-Governing Society on Sovfhub is a living example of how people can organise themselves peacefully, steward shared resources wisely and leave a stronger inheritance for those who come after.',
+    'globe',
   ],
 ];
+
+// Hero backdrop: a constellation of connected points (viewBox 1200 x 480).
+// Nodes hug the edges so they frame the headline rather than crossing it.
+const netNodes: [number, number][] = [
+  [60, 80], [150, 200], [80, 330], [200, 430], [300, 50], [420, 30], [760, 40], [900, 50],
+  [1010, 110], [1130, 200], [1060, 330], [1140, 430], [930, 445], [600, 455], [330, 455],
+];
+const netEdges: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [0, 4], [1, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9],
+  [9, 10], [10, 11], [10, 12], [11, 12], [12, 13], [13, 14], [14, 3],
+];
+
+// Hub diagram: Sovfhub at the centre, Societies arranged around it (viewBox 640 x 340).
+const hubLabels = ['Community', 'Education', 'Project', 'Brand', 'Enterprise'];
+const hubNodes = hubLabels.map((label, i) => {
+  const a = (-90 + i * 72) * (Math.PI / 180);
+  return { label, x: Math.round(320 + 215 * Math.cos(a)), y: Math.round(170 + 120 * Math.sin(a)) };
+});
 
 const steps = [
   ['Become a Companion', 'Complete the Society’s admission process and affirm the Charter, the Covenant of Membership and the Code of Honour.'],
@@ -28,19 +68,19 @@ const steps = [
 ];
 
 const features = [
-  ['Communication & Collaboration', 'Message and collaborate with Companions across the Society in a digital environment.'],
-  ['Education', 'Access courses, resources and learning initiatives created for Companions.'],
-  ['Communities & Societies', 'Establish communities, societies and projects alongside fellow Companions.'],
-  ['Commerce & Enterprise', 'Develop brands and lawful enterprises that create opportunity and abundance.'],
-  ['Society Notices', 'Read the constitutional notices of the Society, published in the open.', '/society-notices'],
-  ['Register of Companions', 'Look up a Companion’s Proof of Life record in the Society’s Register.', '/register'],
+  ['Communication & Collaboration', 'Message and collaborate with Companions across the Society in a digital environment.', 'message'],
+  ['Education', 'Access courses, resources and learning initiatives created for Companions.', 'book'],
+  ['Communities & Societies', 'Establish communities, societies and projects alongside fellow Companions.', 'people'],
+  ['Commerce & Enterprise', 'Develop brands and lawful enterprises that create opportunity and abundance.', 'briefcase'],
+  ['Society Notices', 'Read the constitutional notices of the Society, published in the open.', 'notice', '/society-notices'],
+  ['Register of Companions', 'Look up a Companion’s Proof of Life record in the Society’s Register.', 'idcard', '/register'],
 ];
 
 const values = [
-  ['Peace', 'Seeking peaceful relations and the peaceful resolution of differences.'],
-  ['Love', 'Showing compassion, kindness, fellowship and care towards others.'],
-  ['Honour', 'Acting truthfully, faithfully and with integrity.'],
-  ['Good Conscience', 'Endeavouring to do what is fair, responsible and morally right.'],
+  ['Peace', 'Seeking peaceful relations and the peaceful resolution of differences.', 'peace'],
+  ['Love', 'Showing compassion, kindness, fellowship and care towards others.', 'heart'],
+  ['Honour', 'Acting truthfully, faithfully and with integrity.', 'honour'],
+  ['Good Conscience', 'Endeavouring to do what is fair, responsible and morally right.', 'scales'],
 ];
 ---
 <Layout
@@ -49,7 +89,19 @@ const values = [
 >
   <section class="hero hero-sovfhub">
     <div class="hero-overlay"></div>
+    <svg class="hero-net" viewBox="0 0 1200 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      {netEdges.map(([a, b]) => (
+        <line x1={netNodes[a][0]} y1={netNodes[a][1]} x2={netNodes[b][0]} y2={netNodes[b][1]} />
+      ))}
+      {netNodes.map(([x, y], i) => (
+        <g class="net-node" style={`animation-delay:${(i % 7) * 0.6}s`}>
+          <circle class="net-halo" cx={x} cy={y} r="16" />
+          <circle class="net-dot" cx={x} cy={y} r="5" />
+        </g>
+      ))}
+    </svg>
     <div class="hero-content">
+      <img class="hero-crest" src="/images/crest.png" alt="" width="84" height="84" />
       <p class="hero-kicker">The Platform for Self-Governing Societies</p>
       <h1>Sovfhub</h1>
       <p class="hero-sub">
@@ -81,9 +133,14 @@ const values = [
       </p>
     </div>
     <div class="info-grid" style="--info-grid-cols: 2;">
-      {reasons.map(([term, text], i) => (
+      {reasons.map(([term, text, icon], i) => (
         <div class="info-card reason-card">
-          <span class="reason-num">0{i + 1}</span>
+          <div class="reason-top">
+            <span class="icon-badge icon-badge-lg">
+              <svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} />
+            </span>
+            <span class="reason-num">0{i + 1}</span>
+          </div>
           <h3>{term}</h3>
           <p>{text}</p>
         </div>
@@ -100,6 +157,26 @@ const values = [
         and to carry the Society&rsquo;s values into it.
       </p>
     </div>
+
+    <figure class="hub">
+      <svg viewBox="0 0 640 340" role="img" aria-label="Sovfhub at the centre, with Community, Education, Project, Brand and Enterprise Societies growing around it, all founded on Peace, Love, Honour and Good Conscience.">
+        <ellipse class="hub-ring" cx="320" cy="170" rx="215" ry="120" />
+        {hubNodes.map((n) => (
+          <line class="hub-spoke" x1="320" y1="170" x2={n.x} y2={n.y} />
+        ))}
+        <circle class="hub-glow" cx="320" cy="170" r="74" />
+        <circle class="hub-core" cx="320" cy="170" r="50" />
+        <text class="hub-core-text" x="320" y="170" text-anchor="middle" dominant-baseline="central">Sovfhub</text>
+        {hubNodes.map((n) => (
+          <g>
+            <rect class="hub-pill" x={n.x - 58} y={n.y - 20} width="116" height="40" rx="20" />
+            <text class="hub-pill-text" x={n.x} y={n.y} text-anchor="middle" dominant-baseline="central">{n.label}</text>
+          </g>
+        ))}
+        <text class="hub-caption" x="320" y="322" text-anchor="middle">Founded on Peace · Love · Honour · Good Conscience</text>
+      </svg>
+    </figure>
+
     <ol class="steps">
       {steps.map(([term, text], i) => (
         <li class="step">
@@ -117,15 +194,17 @@ const values = [
       <h2>One Platform, Many Purposes</h2>
     </div>
     <div class="info-grid" style="--info-grid-cols: 3;">
-      {features.map(([term, text, href]) => (
+      {features.map(([term, text, icon, href]) => (
         href ? (
           <a class="info-card is-link" href={href}>
+            <span class="icon-badge"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
             <h3>{term}</h3>
             <p>{text}</p>
             <span class="info-card-cta">Explore →</span>
           </a>
         ) : (
           <div class="info-card">
+            <span class="icon-badge"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
             <h3>{term}</h3>
             <p>{text}</p>
           </div>
@@ -140,8 +219,9 @@ const values = [
       <h2>Built on Four Founding Principles</h2>
     </div>
     <div class="values-grid">
-      {values.map(([term, text]) => (
+      {values.map(([term, text, icon]) => (
         <div class="value">
+          <span class="value-icon"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
           <h3>{term}</h3>
           <p>{text}</p>
         </div>
@@ -204,6 +284,162 @@ const values = [
     max-width: 720px;
   }
 
+  .hero-crest {
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 20px;
+    padding: 6px;
+    object-fit: contain;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.16), 0 14px 34px rgba(11, 29, 58, 0.35);
+  }
+
+  /* Hero constellation */
+  .hero-net {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .hero-net line {
+    stroke: rgba(255, 255, 255, 0.22);
+    stroke-width: 1.4;
+  }
+
+  .net-dot {
+    fill: #ffffff;
+    opacity: 0.85;
+  }
+
+  .net-halo {
+    fill: rgba(255, 255, 255, 0.14);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: net-pulse 4.2s ease-in-out infinite;
+    animation-delay: inherit;
+  }
+
+  @keyframes net-pulse {
+    0%, 100% { transform: scale(0.7); opacity: 0.4; }
+    50% { transform: scale(1.35); opacity: 1; }
+  }
+
+  /* Icons */
+  .icon-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 18px;
+    border-radius: 14px;
+    background: var(--sf-primary-soft);
+    color: var(--sf-primary);
+  }
+
+  .icon-badge-lg {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-primary-strong) 100%);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(22, 98, 214, 0.28);
+  }
+
+  .icon-badge svg,
+  .value-icon svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .info-card.is-link:hover .icon-badge {
+    background: var(--sf-primary);
+    color: #ffffff;
+  }
+
+  /* Hub diagram */
+  .hub {
+    max-width: 640px;
+    margin: 0 auto 40px;
+  }
+
+  .hub svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .hub-ring {
+    fill: none;
+    stroke: var(--sf-primary);
+    stroke-opacity: 0.35;
+    stroke-width: 1.5;
+    stroke-dasharray: 5 7;
+  }
+
+  .hub-spoke {
+    stroke: var(--sf-primary);
+    stroke-opacity: 0.4;
+    stroke-width: 1.8;
+  }
+
+  .hub-glow {
+    fill: var(--sf-primary);
+    fill-opacity: 0.1;
+  }
+
+  .hub-core {
+    fill: var(--sf-primary-strong);
+    filter: drop-shadow(0 10px 18px rgba(15, 79, 181, 0.35));
+  }
+
+  .hub-core-text {
+    fill: #ffffff;
+    font-family: var(--sf-font-display);
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .hub-pill {
+    fill: var(--sf-surface);
+    stroke: var(--sf-primary);
+    stroke-opacity: 0.45;
+    stroke-width: 1.5;
+    filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.08));
+  }
+
+  .hub-pill-text {
+    fill: var(--sf-primary-strong);
+    font-family: var(--sf-font-body);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .hub-caption {
+    fill: var(--sf-text-muted);
+    font-family: var(--sf-font-display);
+    font-style: italic;
+    font-size: 19px;
+    font-weight: 600;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .net-halo {
+      animation: none;
+      opacity: 0.6;
+    }
+  }
+
   .intro-card {
     text-align: center;
   }
@@ -237,15 +473,20 @@ const values = [
     padding: 34px 30px;
   }
 
+  .reason-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
   .reason-num {
-    display: block;
-    margin-bottom: 14px;
     font-family: var(--sf-font-display);
-    font-size: 2rem;
+    font-size: 2.6rem;
     font-weight: 700;
     line-height: 1;
     color: var(--sf-primary);
-    opacity: 0.5;
+    opacity: 0.18;
   }
 
   .reason-card h3 {
@@ -334,6 +575,18 @@ const values = [
     border-radius: var(--sf-radius-lg);
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .value-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
   }
 
   .value h3 {
