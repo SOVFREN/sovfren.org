@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import SovfhubCallout from '../components/SovfhubCallout.astro';
 
 const values = ['Peace', 'Love', 'Honour', 'Good Conscience'];
 ---
@@ -36,6 +37,11 @@ const values = ['Peace', 'Love', 'Honour', 'Good Conscience'];
       ))}
     </div>
   </section>
+
+  <SovfhubCallout
+    heading="Help build that world on Sovfhub"
+    text="Sovfhub is the platform where Companions put these values into practice, founding Self-Governing Societies and building communities that stand for Peace, Love, Honour and Good Conscience."
+  />
 </Layout>
 
 <style>

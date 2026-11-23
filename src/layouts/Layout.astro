@@ -220,6 +220,18 @@ const structuredData = {
         background: rgba(255, 255, 255, 0.24);
       }
 
+      /* Sovfhub is the tool Companions use, so it stands out in the nav. */
+      .nav-links a.nav-feature {
+        background: rgba(255, 255, 255, 0.2);
+        color: #ffffff;
+        font-weight: 600;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+      }
+
+      .nav-links a.nav-feature:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
       @media (max-width: 960px) {
         .menu-toggle {
           display: flex;
@@ -258,6 +270,11 @@ const structuredData = {
 
         .nav-links a:hover {
           background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-links a.nav-feature {
+          background: none;
+          box-shadow: none;
         }
       }
 
@@ -779,7 +796,7 @@ const structuredData = {
         <div class="nav-links" id="nav-links">
           <div class="nav-links-inner">
             <a href="/vision">Vision</a>
-            <a href="/sovfhub">Sovfhub</a>
+            <a class="nav-feature" href="/sovfhub">Sovfhub</a>
             <a href="/register">Register</a>
             <a href="/property">Property</a>
             <a href="/society-notices">Society Notices</a>

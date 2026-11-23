@@ -49,6 +49,26 @@ const pillars = [
     </div>
   </section>
 
+  <section class="stack-section">
+    <div class="section-heading">
+      <p class="kicker">The Society &amp; Sovfhub</p>
+      <h2>The Society is Who We Are. Sovfhub is How We Build.</h2>
+    </div>
+    <div class="duo">
+      <div class="info-card">
+        <h3>The Sovfren Society</h3>
+        <p>A voluntary fellowship of Men &amp; Women founded on Peace, Love, Honour and Good Conscience. It holds the Charter, the values, the Register of Companions and Society Notices.</p>
+        <a class="info-card-cta" href="/founding-charter">Read the Charter →</a>
+      </div>
+      <span class="duo-arrow" aria-hidden="true">→</span>
+      <div class="info-card duo-featured">
+        <h3>Sovfhub</h3>
+        <p>The platform Companions use to take part: communicate, learn, found their own Self-Governing Societies and build together, with more apps once signed up.</p>
+        <a class="btn btn-small" href="/sovfhub">Discover Sovfhub →</a>
+      </div>
+    </div>
+  </section>
+
   <section id="discover" class="card discover-card">
     <div class="discover-text">
       <h2>Discover</h2>
@@ -112,6 +132,59 @@ const pillars = [
 
   .stack-section {
     margin: 64px 0;
+  }
+
+  .duo {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  .duo .info-card {
+    display: flex;
+    flex-direction: column;
+    padding: 34px 30px;
+  }
+
+  .duo .info-card h3 {
+    font-family: var(--sf-font-display);
+    font-size: 1.6rem;
+  }
+
+  .duo .info-card p {
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  .duo .info-card .btn,
+  .duo .info-card .info-card-cta {
+    align-self: flex-start;
+    margin-top: auto;
+  }
+
+  .duo-featured {
+    border-color: rgba(22, 98, 214, 0.35);
+    background: linear-gradient(160deg, var(--sf-primary-soft) 0%, var(--sf-surface) 70%);
+  }
+
+  .duo-arrow {
+    align-self: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--sf-primary);
+  }
+
+  @media (max-width: 760px) {
+    .duo {
+      grid-template-columns: 1fr;
+    }
+
+    .duo-arrow {
+      justify-self: center;
+      transform: rotate(90deg);
+    }
   }
 
   .discover-card {

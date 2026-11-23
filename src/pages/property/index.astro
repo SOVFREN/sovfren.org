@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import SovfhubCallout from '../../components/SovfhubCallout.astro';
 import { searchProperty, type PropertyRecord } from '../../lib/sovfhub';
 
 const q = Astro.url.searchParams.get('q')?.trim();
@@ -43,6 +44,11 @@ if (q) {
       </ul>
     )}
   </section>
+
+  <SovfhubCallout
+    heading="Build with the Society on Sovfhub"
+    text="Property is held under the Society's Stewardship. To communicate, learn and build with fellow Companions, use Sovfhub."
+  />
 </Layout>
 
 <style>

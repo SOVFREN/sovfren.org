@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
+import SovfhubCallout from '../../components/SovfhubCallout.astro';
 import { listPublicNotices } from '../../lib/sovfhub';
 
 const page = Math.max(1, parseInt(Astro.url.searchParams.get('page') ?? '1', 10) || 1);
@@ -51,6 +52,11 @@ function excerpt(text: string, length = 180): string {
       {notices.length === 20 && <a href={`/society-notices?page=${page + 1}`}>Older &rarr;</a>}
     </div>
   </section>
+
+  <SovfhubCallout
+    heading="Take part through Sovfhub"
+    text="Society Notices are the Society's own. To message and collaborate with fellow Companions, or found a community of your own, use Sovfhub."
+  />
 </Layout>
 
 <style>

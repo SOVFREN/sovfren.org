@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import SovfhubCallout from '../../components/SovfhubCallout.astro';
 
 const companionNumber = Astro.url.searchParams.get('companion_number')?.trim();
 if (companionNumber) {
@@ -21,6 +22,11 @@ if (companionNumber) {
       </div>
     </form>
   </section>
+
+  <SovfhubCallout
+    heading="Looking to join or build?"
+    text="The Register is the Society's own record of Companions. To become a Companion, or to communicate, learn and build with others, use Sovfhub."
+  />
 </Layout>
 
 <style>

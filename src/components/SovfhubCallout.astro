@@ -1,0 +1,99 @@
+---
+// A compact banner that points visitors from a Society page to Sovfhub, the
+// platform Companions actually use. `text` lets each page say what it is for
+// and why Sovfhub is the next step.
+interface Props {
+  heading?: string;
+  text?: string;
+}
+
+const {
+  heading = 'Use Sovfhub to build with the Society',
+  text = 'The Society is who we are. Sovfhub is the platform where Companions communicate, learn and found their own Self-Governing Societies.',
+} = Astro.props;
+---
+<aside class="callout">
+  <span class="callout-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="4.5" cy="6" r="1.8" />
+      <circle cx="19.5" cy="6" r="1.8" />
+      <circle cx="4.5" cy="18" r="1.8" />
+      <circle cx="19.5" cy="18" r="1.8" />
+      <path d="M10 10.4L5.9 7.3M14 10.4l4.1-3.1M10 13.6l-4.1 3.1M14 13.6l4.1 3.1" />
+    </svg>
+  </span>
+  <div class="callout-text">
+    <h2>{heading}</h2>
+    <p>{text}</p>
+  </div>
+  <a class="btn btn-light" href="/sovfhub">Discover Sovfhub →</a>
+</aside>
+
+<style>
+  .callout {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin: 32px 0;
+    padding: 28px 32px;
+    border-radius: var(--sf-radius-xl);
+    background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-primary-strong) 60%, #0c3a8c 100%);
+    box-shadow: var(--sf-shadow-lift);
+  }
+
+  .callout-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+  }
+
+  .callout-icon svg {
+    width: 30px;
+    height: 30px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .callout-text {
+    flex: 1 1 auto;
+  }
+
+  .callout h2 {
+    margin: 0 0 6px;
+    font-family: var(--sf-font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #ffffff;
+  }
+
+  .callout p {
+    margin: 0;
+    max-width: 560px;
+    font-size: 0.98rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .callout .btn {
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 760px) {
+    .callout {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 26px 24px;
+    }
+  }
+</style>
