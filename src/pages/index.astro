@@ -15,6 +15,7 @@ const pillars = [
   <section class="hero hero-worldbg">
     <div class="hero-overlay"></div>
     <div class="hero-content">
+      <img class="hero-crest" src="/images/crest.png" alt="Sovfren Society crest" width="84" height="84" />
       <p class="hero-kicker">The Sovfren Society</p>
       <h1>Peace is Power</h1>
       <p class="hero-sub">
@@ -24,14 +25,8 @@ const pillars = [
       </p>
       <div class="hero-actions">
         <a class="btn btn-light" href="https://sovfhub.com">Become a Companion</a>
-        <a class="btn btn-outline" href="/founding-charter">Read the Charter</a>
       </div>
     </div>
-  </section>
-
-  <section class="card crest-card">
-    <img src="/images/crest.png" alt="Sovfren Society crest" class="crest" />
-    <p class="tagline">The Sovfren Society is the vessel for Men &amp; Women who seek knowledge, peace, and prosperity.</p>
   </section>
 
   <section class="stack-section">
@@ -57,36 +52,14 @@ const pillars = [
     <div class="duo">
       <div class="info-card">
         <h3>The Sovfren Society</h3>
-        <p>A voluntary fellowship of Men &amp; Women founded on Peace, Love, Honour and Good Conscience. It holds the Charter, the values, the Register of Companions and Society Notices.</p>
-        <a class="info-card-cta" href="/founding-charter">Read the Charter →</a>
+        <p>A voluntary fellowship of Men &amp; Women founded on Peace, Love, Honour and Good Conscience.</p>
       </div>
       <span class="duo-arrow" aria-hidden="true">→</span>
       <div class="info-card duo-featured">
         <h3>Sovfhub</h3>
-        <p>The platform Companions use to take part: communicate, learn, found their own Self-Governing Societies and build together, with more apps once signed up.</p>
+        <p>The platform Companions use to take part: communicate, learn, found their own Self-Governing Societies and build together.</p>
         <a class="btn btn-small" href="/sovfhub">Discover Sovfhub →</a>
       </div>
-    </div>
-  </section>
-
-  <section id="discover" class="card discover-card">
-    <div class="discover-text">
-      <h2>Discover</h2>
-      <p class="discover-sub">Fulfilment &amp; Abundance</p>
-      <p>Let's grow together and create a world for everyone.</p>
-      <a class="btn" href="/vision">Learn More →</a>
-    </div>
-    <div class="discover-image">
-      <img src="/images/meditate.webp" alt="" />
-    </div>
-  </section>
-
-  <section class="cta-band">
-    <h2>Join the Fellowship</h2>
-    <p>Take your place among Companions building peace, prosperity and a stronger inheritance for generations to come.</p>
-    <div class="cta-actions">
-      <a class="btn btn-light" href="https://sovfhub.com">Become a Companion</a>
-      <a class="btn btn-outline" href="/vision">Our Vision →</a>
     </div>
   </section>
 </Layout>
@@ -102,32 +75,16 @@ const pillars = [
     background: linear-gradient(192deg, rgba(6, 61, 130, 0.6) 0%, rgba(9, 22, 58, 0.82) 100%);
   }
 
-  .crest-card {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 44px;
-    text-align: left;
-    flex-wrap: wrap;
-  }
-
-  .crest {
-    width: 148px;
-    height: 148px;
+  .hero-crest {
+    display: block;
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 20px;
+    padding: 6px;
     object-fit: contain;
-    flex-shrink: 0;
-    filter: drop-shadow(0 10px 18px rgba(11, 29, 58, 0.14));
-  }
-
-  .tagline {
-    max-width: 480px;
-    font-family: var(--sf-font-display);
-    font-style: italic;
-    font-size: 1.4rem;
-    font-weight: 600;
-    line-height: 1.4;
-    color: var(--sf-ink);
-    margin: 0;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.16), 0 14px 34px rgba(11, 29, 58, 0.35);
   }
 
   .stack-section {
@@ -158,8 +115,7 @@ const pillars = [
     margin-bottom: 20px;
   }
 
-  .duo .info-card .btn,
-  .duo .info-card .info-card-cta {
+  .duo .info-card .btn {
     align-self: flex-start;
     margin-top: auto;
   }
@@ -184,56 +140,6 @@ const pillars = [
     .duo-arrow {
       justify-self: center;
       transform: rotate(90deg);
-    }
-  }
-
-  .discover-card {
-    display: flex;
-    align-items: center;
-    gap: 52px;
-    flex-wrap: wrap;
-  }
-
-  .discover-text {
-    flex: 1 1 320px;
-  }
-
-  .discover-text h2 {
-    margin: 0 0 4px !important;
-  }
-
-  .discover-sub {
-    margin: 0 0 16px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: var(--sf-primary-strong);
-  }
-
-  .discover-text > p:not(.discover-sub) {
-    color: var(--sf-text);
-    margin: 0 0 26px;
-  }
-
-  .discover-image {
-    flex: 1 1 280px;
-    display: flex;
-    justify-content: center;
-  }
-
-  .discover-image img {
-    width: 230px;
-    height: 230px;
-    border-radius: 50%;
-    object-fit: cover;
-    box-shadow: var(--sf-shadow-lift);
-    border: 6px solid var(--sf-surface);
-    outline: 1px solid var(--sf-border);
-  }
-
-  @media (max-width: 640px) {
-    .crest-card {
-      text-align: center;
-      justify-content: center;
     }
   }
 </style>
