@@ -1,40 +1,114 @@
 ---
 import Layout from '../layouts/Layout.astro';
 
+const reasons = [
+  [
+    'Reduce Division',
+    'Too much of the online world rewards outrage and sorts people into opposing camps. Sovfhub is built around fellowship and the peaceful resolution of differences, gathering people around what they share rather than what divides them.',
+  ],
+  [
+    'Counter Misinformation',
+    'Trust grows where people can be identified and records are kept openly. On Sovfhub, Companions are listed on the Society’s Register, founders answer for their initiatives, and notices are published in the open.',
+  ],
+  [
+    'Promote Truth & Good Conscience',
+    'Honour means acting truthfully, faithfully and with integrity. Sovfhub gives those values a working home, where education, open communication and the Code of Honour set the standard for how Companions treat one another.',
+  ],
+  [
+    'Advance Humanity & Shape its Values',
+    'Every Self-Governing Society on Sovfhub is a living example of how people can organise themselves peacefully, steward shared resources wisely and leave a stronger inheritance for those who come after.',
+  ],
+];
+
+const steps = [
+  ['Become a Companion', 'Complete the Society’s admission process and affirm the Charter, the Covenant of Membership and the Code of Honour.'],
+  ['Found Your Society', 'Establish a community, society, educational initiative, project or brand, around a purpose you care about.'],
+  ['Set Your Values', 'Gather others around clear standards of conduct, in keeping with the Charter and the Founding Principles.'],
+  ['Grow & Govern', 'Welcome Companions, teach, build and administer your Society with integrity. Founders remain responsible for their initiatives.'],
+];
+
 const features = [
   ['Communication & Collaboration', 'Message and collaborate with Companions across the Society in a digital environment.'],
   ['Education', 'Access courses, resources and learning initiatives created for Companions.'],
-  ['Communities & Societies', 'Establish communities, societies, projects and brands alongside fellow Companions.'],
+  ['Communities & Societies', 'Establish communities, societies and projects alongside fellow Companions.'],
+  ['Commerce & Enterprise', 'Develop brands and lawful enterprises that create opportunity and abundance.'],
+  ['Society Notices', 'Read the constitutional notices of the Society, published in the open.', '/society-notices'],
+  ['Register of Companions', 'Look up a Companion’s Proof of Life record in the Society’s Register.', '/register'],
+];
+
+const values = [
+  ['Peace', 'Seeking peaceful relations and the peaceful resolution of differences.'],
+  ['Love', 'Showing compassion, kindness, fellowship and care towards others.'],
+  ['Honour', 'Acting truthfully, faithfully and with integrity.'],
+  ['Good Conscience', 'Endeavouring to do what is fair, responsible and morally right.'],
 ];
 ---
 <Layout
   title="Sovfhub"
-  description="Sovfhub is the official digital institution of the Sovfren Society — a platform for communication, education, collaboration, commerce and constitutional administration."
+  description="Sovfhub is the Sovfren Society's platform for growing Self-Governing Societies founded on Peace, Love, Honour and Good Conscience, to reduce division, promote truth and help advance humanity."
 >
-  <section class="hero hero-tint">
+  <section class="hero hero-sovfhub">
+    <div class="hero-overlay"></div>
     <div class="hero-content">
-      <p class="hero-kicker">A Constitutional Institution of the Sovfren Society</p>
+      <p class="hero-kicker">The Platform for Self-Governing Societies</p>
       <h1>Sovfhub</h1>
       <p class="hero-sub">
-        The Society's digital home&mdash;where Companions communicate, learn, collaborate,
-        build communities and enterprises, and take part in the constitutional life of
-        the Sovfren Society.
+        Where Companions grow Self-Governing Societies founded on Peace, Love, Honour and
+        Good Conscience&mdash;and help shape the values of the world we share.
       </p>
       <div class="hero-actions">
-        <a class="btn btn-light" href="https://sovfhub.com">Visit Sovfhub →</a>
-        <a class="btn btn-outline" href="/sovfhub-charter">Read the Charter of Sovfhub</a>
+        <a class="btn btn-light" href="https://sovfhub.com">Enter Sovfhub →</a>
+        <a class="btn btn-outline" href="#why">Why Sovfhub exists</a>
       </div>
     </div>
   </section>
 
   <section class="card intro-card">
     <p class="lead">
-      Sovfhub is established as a permanent Constitutional Institution of the Sovfren
-      Society, providing a digital environment through which Companions may
-      communicate, learn, collaborate, establish communities and societies, develop
-      brands and enterprises, participate in constitutional governance and access the
-      institutions of the Society.
+      Sovfhub is the official digital institution of the Sovfren Society: one place to found a
+      community, gather people around shared values, learn together, and govern yourselves
+      openly and honourably.
     </p>
+  </section>
+
+  <section id="why" class="stack-section">
+    <div class="section-heading">
+      <p class="kicker">Why We Built It</p>
+      <h2>A Better Way to Come Together</h2>
+      <p class="section-sub">
+        Humanity&rsquo;s tools for connecting have outpaced its habits of truthfulness and
+        goodwill. Sovfhub exists to help close that gap.
+      </p>
+    </div>
+    <div class="info-grid" style="--info-grid-cols: 2;">
+      {reasons.map(([term, text], i) => (
+        <div class="info-card reason-card">
+          <span class="reason-num">0{i + 1}</span>
+          <h3>{term}</h3>
+          <p>{text}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section id="societies" class="stack-section">
+    <div class="section-heading">
+      <p class="kicker">Self-Governing Societies</p>
+      <h2>Grow Your Own Society</h2>
+      <p class="section-sub">
+        Sovfhub gives you the home, the tools and the standing to build a Society of your own,
+        and to carry the Society&rsquo;s values into it.
+      </p>
+    </div>
+    <ol class="steps">
+      {steps.map(([term, text], i) => (
+        <li class="step">
+          <span class="step-num">{i + 1}</span>
+          <h3>{term}</h3>
+          <p>{text}</p>
+        </li>
+      ))}
+    </ol>
   </section>
 
   <section class="stack-section">
@@ -43,12 +117,52 @@ const features = [
       <h2>One Platform, Many Purposes</h2>
     </div>
     <div class="info-grid" style="--info-grid-cols: 3;">
-      {features.map(([term, text]) => (
-        <div class="info-card">
+      {features.map(([term, text, href]) => (
+        href ? (
+          <a class="info-card is-link" href={href}>
+            <h3>{term}</h3>
+            <p>{text}</p>
+            <span class="info-card-cta">Explore →</span>
+          </a>
+        ) : (
+          <div class="info-card">
+            <h3>{term}</h3>
+            <p>{text}</p>
+          </div>
+        )
+      ))}
+    </div>
+  </section>
+
+  <section class="values-band">
+    <div class="section-heading">
+      <p class="kicker kicker-light">The Values Behind Every Society</p>
+      <h2>Built on Four Founding Principles</h2>
+    </div>
+    <div class="values-grid">
+      {values.map(([term, text]) => (
+        <div class="value">
           <h3>{term}</h3>
           <p>{text}</p>
         </div>
       ))}
+    </div>
+  </section>
+
+  <section id="get-started" class="card get-card">
+    <div class="get-text">
+      <p class="kicker kicker-left">How to Get to Sovfhub</p>
+      <h2>It&rsquo;s One Address Away</h2>
+      <ol class="get-list">
+        <li><strong>Go to sovfhub.com</strong> in any web browser.</li>
+        <li><strong>Create your account</strong> and complete the Society&rsquo;s admission process to become a Companion.</li>
+        <li><strong>Found or join a Society</strong> and begin building with others.</li>
+      </ol>
+    </div>
+    <div class="get-address">
+      <p class="address-label">Visit</p>
+      <p class="address">sovfhub.com</p>
+      <a class="btn" href="https://sovfhub.com">Go to Sovfhub →</a>
     </div>
   </section>
 
@@ -65,18 +179,29 @@ const features = [
   </section>
 
   <section class="cta-band">
-    <h2>Join Sovfhub</h2>
-    <p>Become a Companion of the Sovfren Society to access Sovfhub's communities, education, commerce and constitutional life.</p>
+    <h2>Help Shape What Comes Next</h2>
+    <p>Join Sovfhub, found a Society that stands for something, and take your place among Companions building peace, truth and prosperity for generations to come.</p>
     <div class="cta-actions">
-      <a class="btn btn-light" href="/register">Become a Companion</a>
-      <a class="btn btn-outline" href="https://sovfhub.com">Visit Sovfhub →</a>
+      <a class="btn btn-light" href="https://sovfhub.com">Enter Sovfhub →</a>
+      <a class="btn btn-outline" href="/vision">Our Vision</a>
     </div>
   </section>
 </Layout>
 
 <style>
-  .hero-tint {
-    background: linear-gradient(135deg, #1a6de0 0%, #0f4fb5 55%, #0b1d3a 100%);
+  .hero-sovfhub {
+    min-height: 480px;
+    background: url('/images/hero-world.webp') center/cover no-repeat;
+  }
+
+  .hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(26, 109, 224, 0.82) 0%, rgba(15, 79, 181, 0.88) 50%, rgba(11, 29, 58, 0.94) 100%);
+  }
+
+  .hero-sovfhub .hero-content {
+    max-width: 720px;
   }
 
   .intro-card {
@@ -96,6 +221,198 @@ const features = [
 
   .stack-section {
     margin: 64px 0;
+    scroll-margin-top: 90px;
+  }
+
+  .section-sub {
+    margin: 14px 0 0;
+    color: var(--sf-text-muted);
+    font-size: 1.02rem;
+    line-height: 1.65;
+  }
+
+  /* Why */
+  .reason-card {
+    position: relative;
+    padding: 34px 30px;
+  }
+
+  .reason-num {
+    display: block;
+    margin-bottom: 14px;
+    font-family: var(--sf-font-display);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--sf-primary);
+    opacity: 0.5;
+  }
+
+  .reason-card h3 {
+    font-size: 1.2rem;
+  }
+
+  .reason-card p {
+    font-size: 0.98rem;
+    line-height: 1.7;
+  }
+
+  /* Steps */
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    counter-reset: none;
+  }
+
+  .step {
+    position: relative;
+    padding: 30px 24px 28px;
+    background: var(--sf-surface);
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    box-shadow: var(--sf-shadow-soft);
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    margin-bottom: 16px;
+    border-radius: 50%;
+    background: var(--sf-primary);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: 0 8px 18px rgba(22, 98, 214, 0.28);
+  }
+
+  .step h3 {
+    margin: 0 0 8px;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: var(--sf-ink);
+  }
+
+  .step p {
+    margin: 0;
+    font-size: 0.94rem;
+    line-height: 1.6;
+    color: var(--sf-text-muted);
+  }
+
+  /* Values band */
+  .values-band {
+    margin: 64px 0;
+    padding: 60px 40px;
+    border-radius: var(--sf-radius-xl);
+    background: linear-gradient(160deg, #0f2a55 0%, var(--sf-ink) 100%);
+    box-shadow: var(--sf-shadow-lift);
+  }
+
+  .values-band .section-heading h2 {
+    color: #ffffff;
+  }
+
+  .kicker-light {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .values-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+
+  .value {
+    padding: 26px 22px;
+    border-radius: var(--sf-radius-lg);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .value h3 {
+    margin: 0 0 8px;
+    font-family: var(--sf-font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .value p {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  /* How to get there */
+  .get-card {
+    display: flex;
+    align-items: center;
+    gap: 52px;
+    flex-wrap: wrap;
+    scroll-margin-top: 90px;
+  }
+
+  .get-text {
+    flex: 1 1 340px;
+  }
+
+  .kicker-left {
+    text-align: left;
+    margin-bottom: 8px !important;
+    max-width: none !important;
+  }
+
+  .get-text h2 {
+    margin-top: 0 !important;
+  }
+
+  .get-list {
+    margin: 0;
+    padding-left: 1.3em;
+  }
+
+  .get-list li {
+    margin-bottom: 12px;
+    padding-left: 4px;
+  }
+
+  .get-address {
+    flex: 1 1 260px;
+    padding: 36px 28px;
+    text-align: center;
+    border-radius: var(--sf-radius-lg);
+    background: var(--sf-primary-soft);
+  }
+
+  .get-address p {
+    max-width: none;
+  }
+
+  .address-label {
+    margin: 0 0 4px !important;
+    font-size: 0.78rem !important;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sf-primary-strong) !important;
+  }
+
+  .address {
+    margin: 0 0 22px !important;
+    font-family: var(--sf-font-display);
+    font-size: clamp(2rem, 5vw, 2.6rem) !important;
+    font-weight: 700;
+    line-height: 1.1 !important;
+    color: var(--sf-ink) !important;
+    overflow-wrap: anywhere;
   }
 
   .stewardship-card h2 {
@@ -110,5 +427,27 @@ const features = [
     display: inline-block;
     color: var(--sf-primary-strong);
     font-weight: 600;
+  }
+
+  @media (max-width: 1000px) {
+    .steps,
+    .values-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .steps,
+    .values-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .values-band {
+      padding: 44px 22px;
+    }
+
+    .get-card {
+      gap: 32px;
+    }
   }
 </style>
