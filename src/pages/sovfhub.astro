@@ -11,8 +11,7 @@ const icons: Record<string, string> = {
   book: '<path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2z"/><path d="M22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/>',
   people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14a5 5 0 0 1 4.5 6"/>',
   briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
-  notice: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
-  idcard: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M5.5 16a3.5 3.5 0 0 1 7 0M14 10h4M14 14h4"/>',
+  apps: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>',
   peace: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18M12 12l-6.4 6.4M12 12l6.4 6.4"/>',
   heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   honour: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 21l5-3 5 3-1.5-7.5"/>',
@@ -20,26 +19,24 @@ const icons: Record<string, string> = {
 };
 
 const reasons = [
-  [
-    'Reduce Division',
-    'Too much of the online world rewards outrage and sorts people into opposing camps. Sovfhub is built around fellowship and the peaceful resolution of differences, gathering people around what they share rather than what divides them.',
-    'unity',
-  ],
-  [
-    'Counter Misinformation',
-    'Trust grows where people can be identified and records are kept openly. On Sovfhub, Companions are listed on the Society’s Register, founders answer for their initiatives, and notices are published in the open.',
-    'shield',
-  ],
-  [
-    'Promote Truth & Good Conscience',
-    'Honour means acting truthfully, faithfully and with integrity. Sovfhub gives those values a working home, where education, open communication and the Code of Honour set the standard for how Companions treat one another.',
-    'light',
-  ],
-  [
-    'Advance Humanity & Shape its Values',
-    'Every Self-Governing Society on Sovfhub is a living example of how people can organise themselves peacefully, steward shared resources wisely and leave a stronger inheritance for those who come after.',
-    'globe',
-  ],
+  ['Reduce Division', 'Built around fellowship and the peaceful resolution of differences, gathering people around what they share.', 'unity'],
+  ['Counter Misinformation', 'Companions are identified, founders answer for their initiatives, and notices are published in the open.', 'shield'],
+  ['Promote Truth & Good Conscience', 'Honour means acting truthfully and with integrity. Sovfhub gives those values a working home.', 'light'],
+  ['Advance Humanity', 'Each Society is a living example of people organising peacefully and stewarding shared resources wisely.', 'globe'],
+];
+
+const features = [
+  ['Communication & Collaboration', 'Message and collaborate with Companions in a digital environment.', 'message'],
+  ['Education', 'Access courses, resources and learning initiatives created for Companions.', 'book'],
+  ['Communities & Societies', 'Establish communities, societies and projects alongside fellow Companions.', 'people'],
+  ['Commerce & Enterprise', 'Develop brands and lawful enterprises that create opportunity and abundance.', 'briefcase'],
+];
+
+const values = [
+  ['Peace', 'peace'],
+  ['Love', 'heart'],
+  ['Honour', 'honour'],
+  ['Good Conscience', 'scales'],
 ];
 
 // Hero backdrop: a constellation of connected points (viewBox 1200 x 480).
@@ -59,29 +56,6 @@ const hubNodes = hubLabels.map((label, i) => {
   const a = (-90 + i * 72) * (Math.PI / 180);
   return { label, x: Math.round(320 + 215 * Math.cos(a)), y: Math.round(170 + 120 * Math.sin(a)) };
 });
-
-const steps = [
-  ['Become a Companion', 'Complete the Society’s admission process and affirm the Charter, the Covenant of Membership and the Code of Honour.'],
-  ['Found Your Society', 'Establish a community, society, educational initiative, project or brand, around a purpose you care about.'],
-  ['Set Your Values', 'Gather others around clear standards of conduct, in keeping with the Charter and the Founding Principles.'],
-  ['Grow & Govern', 'Welcome Companions, teach, build and administer your Society with integrity. Founders remain responsible for their initiatives.'],
-];
-
-const features = [
-  ['Communication & Collaboration', 'Message and collaborate with Companions across the Society in a digital environment.', 'message'],
-  ['Education', 'Access courses, resources and learning initiatives created for Companions.', 'book'],
-  ['Communities & Societies', 'Establish communities, societies and projects alongside fellow Companions.', 'people'],
-  ['Commerce & Enterprise', 'Develop brands and lawful enterprises that create opportunity and abundance.', 'briefcase'],
-  ['Society Notices', 'Read the constitutional notices of the Society, published in the open.', 'notice', '/society-notices'],
-  ['Register of Companions', 'Look up a Companion’s Proof of Life record in the Society’s Register.', 'idcard', '/register'],
-];
-
-const values = [
-  ['Peace', 'Seeking peaceful relations and the peaceful resolution of differences.', 'peace'],
-  ['Love', 'Showing compassion, kindness, fellowship and care towards others.', 'heart'],
-  ['Honour', 'Acting truthfully, faithfully and with integrity.', 'honour'],
-  ['Good Conscience', 'Endeavouring to do what is fair, responsible and morally right.', 'scales'],
-];
 ---
 <Layout
   title="Sovfhub"
@@ -115,22 +89,10 @@ const values = [
     </div>
   </section>
 
-  <section class="card intro-card">
-    <p class="lead">
-      Sovfhub is the official digital institution of the Sovfren Society: one place to found a
-      community, gather people around shared values, learn together, and govern yourselves
-      openly and honourably.
-    </p>
-  </section>
-
   <section id="why" class="stack-section">
     <div class="section-heading">
       <p class="kicker">Why We Built It</p>
       <h2>A Better Way to Come Together</h2>
-      <p class="section-sub">
-        Humanity&rsquo;s tools for connecting have outpaced its habits of truthfulness and
-        goodwill. Sovfhub exists to help close that gap.
-      </p>
     </div>
     <div class="info-grid" style="--info-grid-cols: 2;">
       {reasons.map(([term, text, icon], i) => (
@@ -148,13 +110,13 @@ const values = [
     </div>
   </section>
 
-  <section id="societies" class="stack-section">
+  <section class="stack-section">
     <div class="section-heading">
       <p class="kicker">Self-Governing Societies</p>
       <h2>Grow Your Own Society</h2>
       <p class="section-sub">
-        Sovfhub gives you the home, the tools and the standing to build a Society of your own,
-        and to carry the Society&rsquo;s values into it.
+        Found a community, school, project, brand or enterprise on Sovfhub, and build it
+        around the values you stand for.
       </p>
     </div>
 
@@ -176,16 +138,6 @@ const values = [
         <text class="hub-caption" x="320" y="322" text-anchor="middle">Founded on Peace · Love · Honour · Good Conscience</text>
       </svg>
     </figure>
-
-    <ol class="steps">
-      {steps.map(([term, text], i) => (
-        <li class="step">
-          <span class="step-num">{i + 1}</span>
-          <h3>{term}</h3>
-          <p>{text}</p>
-        </li>
-      ))}
-    </ol>
   </section>
 
   <section class="stack-section">
@@ -193,37 +145,32 @@ const values = [
       <p class="kicker">What You Can Do</p>
       <h2>One Platform, Many Purposes</h2>
     </div>
-    <div class="info-grid" style="--info-grid-cols: 3;">
-      {features.map(([term, text, icon, href]) => (
-        href ? (
-          <a class="info-card is-link" href={href}>
-            <span class="icon-badge"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
-            <h3>{term}</h3>
-            <p>{text}</p>
-            <span class="info-card-cta">Explore →</span>
-          </a>
-        ) : (
-          <div class="info-card">
-            <span class="icon-badge"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
-            <h3>{term}</h3>
-            <p>{text}</p>
-          </div>
-        )
+    <div class="info-grid" style="--info-grid-cols: 4;">
+      {features.map(([term, text, icon]) => (
+        <div class="info-card">
+          <span class="icon-badge"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
+          <h3>{term}</h3>
+          <p>{text}</p>
+        </div>
       ))}
+    </div>
+
+    <div class="more-apps">
+      <span class="icon-badge icon-badge-lg"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons.apps} /></span>
+      <div>
+        <h3>More apps, once you&rsquo;ve signed up</h3>
+        <p>Creating your Sovfhub account opens the door to further apps within the platform.</p>
+      </div>
     </div>
   </section>
 
   <section class="values-band">
-    <div class="section-heading">
-      <p class="kicker kicker-light">The Values Behind Every Society</p>
-      <h2>Built on Four Founding Principles</h2>
-    </div>
-    <div class="values-grid">
-      {values.map(([term, text, icon]) => (
+    <p class="kicker kicker-light">Every Society is built on</p>
+    <div class="values-row">
+      {values.map(([term, icon]) => (
         <div class="value">
           <span class="value-icon"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[icon]} /></span>
           <h3>{term}</h3>
-          <p>{text}</p>
         </div>
       ))}
     </div>
@@ -235,35 +182,15 @@ const values = [
       <h2>It&rsquo;s One Address Away</h2>
       <ol class="get-list">
         <li><strong>Go to sovfhub.com</strong> in any web browser.</li>
-        <li><strong>Create your account</strong> and complete the Society&rsquo;s admission process to become a Companion.</li>
-        <li><strong>Found or join a Society</strong> and begin building with others.</li>
+        <li><strong>Sign up</strong> and complete the Society&rsquo;s admission process.</li>
+        <li><strong>Found or join a Society</strong> and explore the other apps.</li>
       </ol>
+      <a class="link-arrow" href="/sovfhub-charter">Read the Charter of Sovfhub →</a>
     </div>
     <div class="get-address">
       <p class="address-label">Visit</p>
       <p class="address">sovfhub.com</p>
       <a class="btn" href="https://sovfhub.com">Go to Sovfhub →</a>
-    </div>
-  </section>
-
-  <section class="card stewardship-card">
-    <h2>Governed With Integrity</h2>
-    <p>
-      Sovfhub operates under the constitutional oversight of the Principal Guardian,
-      the Council of Guardians and authorised Constitutional Officers. The information,
-      technology and digital resources entrusted to Sovfhub form part of the Society's
-      Common Estate, and are administered with integrity, Good Conscience and faithful
-      Stewardship.
-    </p>
-    <a class="link-arrow" href="/sovfhub-charter">Read the full Charter of Sovfhub →</a>
-  </section>
-
-  <section class="cta-band">
-    <h2>Help Shape What Comes Next</h2>
-    <p>Join Sovfhub, found a Society that stands for something, and take your place among Companions building peace, truth and prosperity for generations to come.</p>
-    <div class="cta-actions">
-      <a class="btn btn-light" href="https://sovfhub.com">Enter Sovfhub →</a>
-      <a class="btn btn-outline" href="/vision">Our Vision</a>
     </div>
   </section>
 </Layout>
@@ -327,6 +254,25 @@ const values = [
     50% { transform: scale(1.35); opacity: 1; }
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .net-halo {
+      animation: none;
+      opacity: 0.6;
+    }
+  }
+
+  .stack-section {
+    margin: 64px 0;
+    scroll-margin-top: 90px;
+  }
+
+  .section-sub {
+    margin: 14px 0 0;
+    color: var(--sf-text-muted);
+    font-size: 1.02rem;
+    line-height: 1.65;
+  }
+
   /* Icons */
   .icon-badge {
     display: flex;
@@ -344,6 +290,7 @@ const values = [
     width: 56px;
     height: 56px;
     margin-bottom: 0;
+    flex-shrink: 0;
     border-radius: 16px;
     background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-primary-strong) 100%);
     color: #ffffff;
@@ -361,15 +308,40 @@ const values = [
     stroke-linejoin: round;
   }
 
-  .info-card.is-link:hover .icon-badge {
-    background: var(--sf-primary);
-    color: #ffffff;
+  /* Why */
+  .reason-card {
+    padding: 34px 30px;
+  }
+
+  .reason-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .reason-num {
+    font-family: var(--sf-font-display);
+    font-size: 2.6rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--sf-primary);
+    opacity: 0.18;
+  }
+
+  .reason-card h3 {
+    font-size: 1.2rem;
+  }
+
+  .reason-card p {
+    font-size: 0.98rem;
+    line-height: 1.7;
   }
 
   /* Hub diagram */
   .hub {
     max-width: 640px;
-    margin: 0 auto 40px;
+    margin: 0 auto;
   }
 
   .hub svg {
@@ -433,116 +405,28 @@ const values = [
     font-weight: 600;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .net-halo {
-      animation: none;
-      opacity: 0.6;
-    }
-  }
-
-  .intro-card {
-    text-align: center;
-  }
-
-  .lead {
-    max-width: 720px;
-    margin: 0 auto;
-    font-family: var(--sf-font-display);
-    font-style: italic;
-    font-size: 1.3rem;
-    font-weight: 600;
-    line-height: 1.55;
-    color: var(--sf-ink);
-  }
-
-  .stack-section {
-    margin: 64px 0;
-    scroll-margin-top: 90px;
-  }
-
-  .section-sub {
-    margin: 14px 0 0;
-    color: var(--sf-text-muted);
-    font-size: 1.02rem;
-    line-height: 1.65;
-  }
-
-  /* Why */
-  .reason-card {
-    position: relative;
-    padding: 34px 30px;
-  }
-
-  .reason-top {
+  /* More apps strip */
+  .more-apps {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-  }
-
-  .reason-num {
-    font-family: var(--sf-font-display);
-    font-size: 2.6rem;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--sf-primary);
-    opacity: 0.18;
-  }
-
-  .reason-card h3 {
-    font-size: 1.2rem;
-  }
-
-  .reason-card p {
-    font-size: 0.98rem;
-    line-height: 1.7;
-  }
-
-  /* Steps */
-  .steps {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-    counter-reset: none;
-  }
-
-  .step {
-    position: relative;
-    padding: 30px 24px 28px;
-    background: var(--sf-surface);
-    border: 1px solid var(--sf-border);
+    gap: 22px;
+    margin-top: 20px;
+    padding: 26px 30px;
     border-radius: var(--sf-radius-lg);
-    box-shadow: var(--sf-shadow-soft);
+    background: var(--sf-primary-soft);
+    border: 1px solid rgba(22, 98, 214, 0.18);
   }
 
-  .step-num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    margin-bottom: 16px;
-    border-radius: 50%;
-    background: var(--sf-primary);
-    color: #ffffff;
-    font-weight: 700;
-    font-size: 1rem;
-    box-shadow: 0 8px 18px rgba(22, 98, 214, 0.28);
-  }
-
-  .step h3 {
-    margin: 0 0 8px;
-    font-size: 1.08rem;
+  .more-apps h3 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--sf-ink);
   }
 
-  .step p {
+  .more-apps p {
     margin: 0;
-    font-size: 0.94rem;
+    font-size: 0.96rem;
     line-height: 1.6;
     color: var(--sf-text-muted);
   }
@@ -550,31 +434,29 @@ const values = [
   /* Values band */
   .values-band {
     margin: 64px 0;
-    padding: 60px 40px;
+    padding: 44px 40px;
+    text-align: center;
     border-radius: var(--sf-radius-xl);
     background: linear-gradient(160deg, #0f2a55 0%, var(--sf-ink) 100%);
     box-shadow: var(--sf-shadow-lift);
   }
 
-  .values-band .section-heading h2 {
-    color: #ffffff;
-  }
-
   .kicker-light {
+    margin-bottom: 26px;
     color: rgba(255, 255, 255, 0.7);
   }
 
-  .values-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
+  .values-row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px 40px;
   }
 
   .value {
-    padding: 26px 22px;
-    border-radius: var(--sf-radius-lg);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
 
   .value-icon {
@@ -583,25 +465,17 @@ const values = [
     justify-content: center;
     width: 48px;
     height: 48px;
-    margin-bottom: 16px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.12);
     color: #ffffff;
   }
 
   .value h3 {
-    margin: 0 0 8px;
+    margin: 0;
     font-family: var(--sf-font-display);
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 700;
     color: #ffffff;
-  }
-
-  .value p {
-    margin: 0;
-    font-size: 0.92rem;
-    line-height: 1.6;
-    color: rgba(255, 255, 255, 0.78);
   }
 
   /* How to get there */
@@ -628,13 +502,20 @@ const values = [
   }
 
   .get-list {
-    margin: 0;
+    margin: 0 0 18px;
     padding-left: 1.3em;
   }
 
   .get-list li {
     margin-bottom: 12px;
     padding-left: 4px;
+  }
+
+  .link-arrow {
+    display: inline-block;
+    color: var(--sf-primary-strong);
+    font-weight: 600;
+    font-size: 0.95rem;
   }
 
   .get-address {
@@ -668,35 +549,19 @@ const values = [
     overflow-wrap: anywhere;
   }
 
-  .stewardship-card h2 {
-    margin-top: 0 !important;
-  }
-
-  .stewardship-card p {
-    max-width: 720px;
-  }
-
-  .link-arrow {
-    display: inline-block;
-    color: var(--sf-primary-strong);
-    font-weight: 600;
-  }
-
-  @media (max-width: 1000px) {
-    .steps,
-    .values-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
   @media (max-width: 640px) {
-    .steps,
-    .values-grid {
-      grid-template-columns: 1fr;
+    .values-band {
+      padding: 36px 22px;
     }
 
-    .values-band {
-      padding: 44px 22px;
+    .values-row {
+      gap: 18px 28px;
+    }
+
+    .more-apps {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 24px;
     }
 
     .get-card {
