@@ -21,7 +21,7 @@ const baseTitle = isNote ? 'Promissory Note' : 'Bill of Exchange';
 // The UNCITRAL Convention requires these words in the text of an international instrument.
 const international = t.form === 'international';
 const title = international ? `International ${baseTitle} (UNCITRAL Convention)` : baseTitle;
-const atPlace = t.placeOfPayment ? <>, payable at <strong>{t.placeOfPayment}</strong>{international && t.paymentCountry ? `, ${t.paymentCountry}` : ''}</> : null;
+const payPlace = t.placeOfPayment ? `${t.placeOfPayment}${international && t.paymentCountry ? `, ${t.paymentCountry}` : ''}` : '';
 const signer = isNote ? t.maker : t.drawer;
 const status = state?.status ?? 'active';
 
@@ -91,12 +91,12 @@ const exchanged = inst.events.find((e) => e.type === 'exchange')?.data as
       {isNote ? (
         <>
           {when}, I, <strong>{t.maker?.name}</strong>, unconditionally promise to pay this {international ? <strong>{title}</strong> : 'Promissory Note'} {t.bearer ? <strong>to the Bearer</strong> : <>to the order of <strong>{t.payee.name}</strong></>} the
-          sum of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}{atPlace}. Value received.
+          sum of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}{payPlace && <>, payable at <strong>{payPlace}</strong></>}. Value received.
         </>
       ) : (
         <>
           {onDemand ? 'At sight' : when}, pay this {international ? <strong>{title}</strong> : 'Bill of Exchange'} unconditionally to the order of <strong>{t.payee.name}</strong> the sum
-          of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}{atPlace}. Value received.
+          of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}{payPlace && <>, payable at <strong>{payPlace}</strong></>}. Value received.
           Drawn by <strong>{t.drawer?.name}</strong> upon <strong>{t.drawee?.name}</strong>{state?.accepted ? ', who has accepted it' : ''}.
         </>
       )}
