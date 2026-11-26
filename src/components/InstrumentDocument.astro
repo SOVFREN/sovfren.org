@@ -85,7 +85,7 @@ const exchanged = inst.events.find((e) => e.type === 'exchange')?.data as
     <p class="clause">
       {isNote ? (
         <>
-          {when}, I, <strong>{t.maker?.name}</strong>, promise to pay to the order of <strong>{t.payee.name}</strong> the sum
+          {when}, I, <strong>{t.maker?.name}</strong>, promise to pay {t.bearer ? <strong>the Bearer</strong> : <>to the order of <strong>{t.payee.name}</strong></>} the sum
           of <strong>{sum}</strong>{words ? <> (<em>{words}</em>)</> : null}{t.interest ? <>, together with interest as follows: {t.interest}</> : null}.
         </>
       ) : (
@@ -106,7 +106,9 @@ const exchanged = inst.events.find((e) => e.type === 'exchange')?.data as
           <div><dt>Drawee {state?.accepted ? '(accepted)' : ''}</dt><dd>{t.drawee?.name}<small>{sub(t.drawee)}</small></dd></div>
         </>
       )}
-      <div><dt>Original payee</dt><dd>{t.payee.name}<small>{sub(t.payee)}</small></dd></div>
+      {t.bearer
+        ? <div><dt>Payable to</dt><dd>The Bearer<small>Whoever holds this note</small></dd></div>
+        : <div><dt>Original payee</dt><dd>{t.payee.name}<small>{sub(t.payee)}</small></dd></div>}
     </dl>
 
     <dl class="terms">
@@ -156,7 +158,7 @@ const exchanged = inst.events.find((e) => e.type === 'exchange')?.data as
         <ol>
           {endorsements.map((e) => {
             const d = e.data as { from: Party; to: Party };
-            return <li><strong>{d.from.name}</strong> to <strong>{d.to.name}</strong><small>{e.at.slice(0, 10)} · signed by the holder's key</small></li>;
+            return <li>{t.bearer ? <>Passed to a new bearer</> : <><strong>{d.from.name}</strong> to <strong>{d.to.name}</strong></>}<small>{e.at.slice(0, 10)} · signed by the holder's key</small></li>;
           })}
         </ol>
       </section>
@@ -167,7 +169,7 @@ const exchanged = inst.events.find((e) => e.type === 'exchange')?.data as
     <footer class="foot">
       <div class="holder">
         <span class="label">Held by</span>
-        <strong>{payee.name}</strong>
+        <strong>{t.bearer ? 'The Bearer' : payee.name}</strong>
         {sub(payee) && <small>{sub(payee)}</small>}
         <small class="deliv">
           {state?.delivered ? `Delivered ${state.delivered.at.slice(0, 10)} (${state.delivered.method})` : status === 'active' ? 'Not yet delivered to this holder' : ''}

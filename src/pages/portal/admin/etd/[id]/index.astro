@@ -167,12 +167,19 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
             <summary><span>Transfer to a new holder <span class="sub">signed by the current holder</span></span></summary>
             <form method="post" class="f signed" data-sign="transfer">
               <input type="hidden" name="act" value="transfer" /><input type="hidden" name="seq" value={last.seq} />
-              <div class="row">
-                <label>New holder name<input name="toName" required maxlength="120" /></label>
-                <label>Companion No. / ref<input name="toRef" maxlength="60" /></label>
-                <label>LEI (optional)<input name="toLei" maxlength="20" /></label>
-              </div>
-              <label>New holder's public key<textarea name="toKey" rows="2" required class="mono"></textarea></label>
+              {t.bearer ? (
+                <>
+                  <input type="hidden" name="toName" value="Bearer" />
+                  <p class="note" style="margin:0">This is a bearer note. It passes to whoever holds the new key, so no name is needed. Give the new key file to the person receiving it.</p>
+                </>
+              ) : (
+                <div class="row">
+                  <label>New holder name<input name="toName" required maxlength="120" /></label>
+                  <label>Companion No. / ref<input name="toRef" maxlength="60" /></label>
+                  <label>LEI (optional)<input name="toLei" maxlength="20" /></label>
+                </div>
+              )}
+              <label>{t.bearer ? "New bearer's public key" : "New holder's public key"}<textarea name="toKey" rows="2" required class="mono"></textarea></label>
               <fieldset><legend>Current holder signs</legend>
                 <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
                 <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
@@ -297,7 +304,7 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
           {['transfer', 'pay', 'rekey'].includes(e.type) && <span class="tag">holder-signed</span>}
           {e.type === 'recover' && <span class="tag witness">registry-witnessed</span>}
           <div class="when">{e.at.replace('T', ' ').slice(0, 19)} UTC · recorded by {e.by}</div>
-          {e.type === 'transfer' && <div>{pName((e.data as any).from)} → {pName((e.data as any).to)}</div>}
+          {e.type === 'transfer' && <div>{t.bearer ? 'Passed to a new bearer' : `${pName((e.data as any).from)} → ${pName((e.data as any).to)}`}</div>}
           {e.type === 'deliver' && <div>{(e.data as any).method}</div>}
           {e.type === 'cancel' && <div>{(e.data as any).reason}</div>}
           {e.type === 'recover' && <div>{(e.data as any).reason}</div>}

@@ -68,6 +68,7 @@ if (Astro.request.method === 'POST') {
         payableTz: f('payableTz'),
         interestRate: f('interestRate'),
         dayCount: f('dayCount'),
+        bearer: f('type') === 'promissory_note' && f('payTo') === 'bearer',
         payee: party('payee'),
         payeeKey: f('payeeKey'),
         maker: party('maker'),
@@ -254,10 +255,20 @@ const money = (v: string) => {
             <div class="row"><label>Name<input name="draweeName" maxlength="120" value={val('draweeName')} /></label><label>Companion No. / ref<input name="draweeRef" maxlength="60" value={val('draweeRef')} /></label></div>
             <div class="row"><label>LEI (optional)<input name="draweeLei" maxlength="20" value={val('draweeLei')} /></label><label>BIC (optional)<input name="draweeBic" maxlength="11" value={val('draweeBic')} /></label></div>
           </fieldset>
-          <fieldset><legend>Payee (pay to the order of)</legend>
-            <div class="row"><label>Name<input name="payeeName" required maxlength="120" value={val('payeeName')} /></label><label>Companion No. / ref<input name="payeeRef" maxlength="60" value={val('payeeRef')} /></label></div>
-            <div class="row"><label>LEI (optional)<input name="payeeLei" maxlength="20" value={val('payeeLei')} /></label><label>BIC (optional)<input name="payeeBic" maxlength="11" value={val('payeeBic')} /></label></div>
-            <label><span>Payee public key (from their <a href="/portal/admin/etd/keys">holder key</a>)</span><textarea name="payeeKey" rows="2" required class="mono">{val('payeeKey')}</textarea></label>
+          <fieldset><legend>Pay to</legend>
+            <div class="row only-note">
+              <label class="chk"><input type="radio" name="payTo" value="named" checked={val('payTo', 'named') === 'named'} /> A named payee (to the order of)</label>
+              <label class="chk"><input type="radio" name="payTo" value="bearer" checked={val('payTo') === 'bearer'} /> The bearer (whoever holds the note)</label>
+            </div>
+            <p class="note only-note" id="bearer-note" hidden style="margin:0">
+              A bearer note is paid to whoever holds it, and passes to a new holder with just their public key, so it is easy to transfer.
+              Whoever has the key file is the bearer, so keep it as carefully as cash. This cannot be changed after issue.
+            </p>
+            <div id="named-fields">
+              <div class="row"><label>Name<input name="payeeName" required maxlength="120" value={val('payeeName')} /></label><label>Companion No. / ref<input name="payeeRef" maxlength="60" value={val('payeeRef')} /></label></div>
+              <div class="row"><label>LEI (optional)<input name="payeeLei" maxlength="20" value={val('payeeLei')} /></label><label>BIC (optional)<input name="payeeBic" maxlength="11" value={val('payeeBic')} /></label></div>
+            </div>
+            <label><span id="key-label">Payee public key (from their <a href="/portal/admin/etd/keys">holder key</a>)</span><textarea name="payeeKey" rows="2" required class="mono">{val('payeeKey')}</textarea></label>
           </fieldset>
         </div>
       </div>
@@ -374,6 +385,15 @@ const money = (v: string) => {
     form.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
     form.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
 
+    // Pay to the bearer: promissory notes only. No named payee; the key is the bearer's.
+    const bearer = !bill && form.querySelector<HTMLInputElement>('input[name="payTo"]:checked')?.value === 'bearer';
+    document.getElementById('named-fields')!.hidden = bearer;
+    document.getElementById('bearer-note')!.hidden = !bearer;
+    field('payeeName').required = !bearer;
+    document.getElementById('key-label')!.textContent = bearer
+      ? 'Bearer public key (from the holder key file that will hold this note)'
+      : 'Payee public key (from their holder key)';
+
     const other = field('currency').value === '__other';
     document.getElementById('currency-other')!.hidden = !other;
     field('currencyOther').required = other;
@@ -386,7 +406,7 @@ const money = (v: string) => {
     }
     showMaturity();
   };
-  form.querySelectorAll<HTMLInputElement>('input[name="type"], input[name="payableMode"]').forEach((r) => r.addEventListener('change', sync));
+  form.querySelectorAll<HTMLInputElement>('input[name="type"], input[name="payableMode"], input[name="payTo"]').forEach((r) => r.addEventListener('change', sync));
   form.addEventListener('input', (e) => {
     const n = (e.target as HTMLInputElement).name;
     if (n === 'currency') sync();

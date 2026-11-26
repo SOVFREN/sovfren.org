@@ -88,6 +88,15 @@ if (gate instanceof Response) return gate;
       <li>Click <strong>Issue and sign</strong>. The terms are now sealed and cannot be edited. If something is wrong, cancel and issue a new one. If issuing fails for any reason, the fee is returned to your wallet automatically.</li>
     </ol>
 
+    <h3>Pay to the bearer (promissory notes)</h3>
+    <p>
+      When issuing a promissory note, the maker chooses either <strong>A named payee</strong> or <strong>The bearer</strong>. A bearer note is
+      paid to whoever holds it, so it passes on easily: the holder signs it over to a new key, and no name is needed. Create a holder key
+      for the note, paste its public key as the bearer key, and give the key file to the person you are paying. <strong>Whoever has the key
+      file is the bearer</strong>, so treat it like cash. The choice is sealed at issue and cannot be changed. A named note stays named, and a
+      bearer note stays bearer. Bills of exchange are always made out to a named payee.
+    </p>
+
     <table>
       <thead><tr><th>Role</th><th>Who they are</th><th>Used on</th></tr></thead>
       <tbody>

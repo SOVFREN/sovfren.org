@@ -85,7 +85,10 @@ export interface Terms {
   placeOfIssue: string;
   payableOn: string; // "on demand", an ISO date, or an ISO date and time "YYYY-MM-DDTHH:MM"
   payableTz?: string; // IANA time zone the time (if any) is in, e.g. "Europe/London"
-  payee: Party; // payable to the order of
+  payee: Party; // payable to the order of (for a bearer note, the fixed party "Bearer")
+  // Promissory notes only: payable to whoever holds the note. Whoever controls the holder key is the bearer,
+  // and passing it on needs only the new key, no named person. Sealed, so it can never be switched afterwards.
+  bearer?: boolean;
   payeeKey: string; // payee's Ed25519 public key (raw, base64): only they can endorse onward
   maker?: Party; // promissory note: the promisor
   drawer?: Party; // bill of exchange: who orders payment
@@ -265,8 +268,11 @@ const sameParty = (a: Party, b: Party) =>
 
 const isoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 
+export const BEARER_NAME = 'Bearer';
+
 export interface IssueInput {
   type: InstrumentType;
+  bearer?: boolean; // promissory notes only: pay to the bearer instead of a named payee
   amount: string;
   currency: string;
   currencySymbol?: string;
@@ -355,6 +361,8 @@ async function makeEvent(
 export async function issue(input: IssueInput, by: string): Promise<Instrument> {
   const type = input.type;
   if (type !== 'promissory_note' && type !== 'bill_of_exchange') throw new Error('Choose an instrument type.');
+  const bearer = input.bearer === true;
+  if (bearer && type !== 'promissory_note') throw new Error('Only a promissory note can be made payable to the bearer.');
   const amount = input.amount.trim();
   if (!/^\d{1,15}(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) throw new Error('Enter a valid amount (e.g. 12500.00).');
   const currency = input.currency.trim().toUpperCase();
@@ -420,8 +428,9 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     placeOfIssue: place,
     payableOn,
     ...(payableTz ? { payableTz } : {}),
-    payee: cleanParty(input.payee, 'Payee'),
-    payeeKey: cleanKey(input.payeeKey, 'Payee public key'),
+    payee: bearer ? { name: BEARER_NAME } : cleanParty(input.payee, 'Payee'),
+    ...(bearer ? { bearer: true } : {}),
+    payeeKey: cleanKey(input.payeeKey, bearer ? 'Bearer public key' : 'Payee public key'),
     ...(type === 'promissory_note'
       ? { maker: cleanParty(input.maker, 'Maker') }
       : { drawer: cleanParty(input.drawer, 'Drawer'), drawee: cleanParty(input.drawee, 'Drawee') }),
@@ -477,8 +486,12 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
       const from = d.from as Party, to = d.to as Party;
       if (!from?.name || !to?.name) return `event ${e.seq}: transfer needs from and to`;
       if (!sameParty(from, s.holder)) return `event ${e.seq}: transferor is not the current holder`;
-      if (sameParty(to, s.holder)) return `event ${e.seq}: transfer to the same holder`;
       const toKey = String(d.toKey ?? '');
+      if (terms.bearer) {
+        // A bearer note stays a bearer note: it passes to a new key, never to a named person.
+        if (to.name !== BEARER_NAME || to.ref || to.lei || to.bic) return `event ${e.seq}: a bearer note can only be passed to the bearer`;
+        if (toKey === s.holderKey) return `event ${e.seq}: transfer to the same key`;
+      } else if (sameParty(to, s.holder)) return `event ${e.seq}: transfer to the same holder`;
       if (!validHolderKey(toKey)) return `event ${e.seq}: new holder has no valid public key`;
       const msg = actMessage(docId, e.seq, e.prevHash, 'transfer', [to.name, to.ref ?? '', toKey]);
       if (!holderSigOk(s.holderKey, msg, d.holderSig)) return `event ${e.seq}: transfer is not signed by the current holder's key`;
@@ -620,7 +633,7 @@ export async function act(id: string, expectSeq: number, action: Action, by: str
     let data: Record<string, unknown>;
     switch (action.type) {
       case 'transfer':
-        data = { from: v.state.holder, to: cleanParty(action.to, 'New holder'), toKey: cleanKey(action.toKey, 'New holder public key'), holderSig: action.holderSig };
+        data = { from: v.state.holder, to: inst.terms.bearer ? { name: BEARER_NAME } : cleanParty(action.to, 'New holder'), toKey: cleanKey(action.toKey, 'New holder public key'), holderSig: action.holderSig };
         break;
       case 'deliver':
         if (!action.method.trim()) throw new Error('Enter the delivery method.');
@@ -699,6 +712,7 @@ export async function exportStandard(inst: Instrument, baseUrl: string) {
       drawer: t.drawer,
       drawee: t.drawee,
       originalPayee: t.payee,
+      payableToBearer: t.bearer === true,
       currentHolder: v.state?.holder,
     },
     status: {
@@ -780,6 +794,7 @@ export async function exchangeInstrument(
     const created = await issue(
       {
         type: t.type,
+        bearer: t.bearer,
         amount: newAmount,
         currency: newCurrency,
         currencySymbol: input.newSymbol,
