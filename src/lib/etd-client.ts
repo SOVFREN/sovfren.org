@@ -78,3 +78,12 @@ export async function signWithKeyFile(fileText: string, passphrase: string, mess
 // Must match actMessage() in etd.ts.
 export const actMessage = (id: string, seq: string, prevHash: string, type: string, args: string[] = []) =>
   ['etd-act-v1', id, seq, prevHash, type, ...args].join('\n');
+
+// One-time code for sending an instrument by email: 32 random bytes as hex, and its SHA-256 (what the holder signs).
+export function randomToken(): string {
+  return [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+export async function sha256Hex(s: string): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}

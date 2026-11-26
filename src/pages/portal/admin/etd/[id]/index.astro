@@ -9,7 +9,8 @@ import { splitPayable } from '../../../../../lib/maturity';
 import { issuerLabel, issuerParty } from '../../../../../lib/etd-risk';
 import '../../../../../styles/etd.css';
 import { requireAdmin } from '../../../../../lib/admin';
-import { act, exchangeInstrument, getInstrument, linkProblem, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
+import { act, exchangeInstrument, getInstrument, linkProblem, replay, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
+import { closeOffer, sendOffer, type OfferResult } from '../../../../../lib/etd-send';
 import { getSession } from '../../../../../lib/session';
 import { findCurrency, getCurrencies } from '../../../../../lib/currencies';
 import { getFeeQuote, issueWithFee } from '../../../../../lib/etd-fees';
@@ -30,6 +31,8 @@ if (!inst) return new Response('Not found', { status: 404 });
 
 let message: string | null = null;
 let error: string | null = null;
+let offerResult: OfferResult | null = null;
+const baseUrl = new URL(Astro.site ?? Astro.url.origin).origin;
 
 if (Astro.request.method === 'POST') {
   if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
@@ -43,6 +46,23 @@ if (Astro.request.method === 'POST') {
       const to: Party = { name: f('toName'), ...(f('toRef').trim() ? { ref: f('toRef').trim() } : {}), ...(f('toLei').trim() ? { lei: f('toLei') } : {}) };
       inst = await act(id, expectSeq, { type: 'transfer', to, toKey: f('toKey'), holderSig: f('holderSig') }, adminNumber);
       message = 'Transfer recorded, signed by the holder. The new holder has not yet been marked as delivered.';
+    } else if (kind === 'offer') {
+      offerResult = await sendOffer(
+        id,
+        expectSeq,
+        { email: f('email'), toName: f('toName'), toRef: f('toRef'), token: f('token'), tokenHash: f('tokenHash'), expiresAt: f('expiresAt'), holderSig: f('holderSig') },
+        adminNumber,
+        baseUrl,
+      );
+      inst = offerResult.inst;
+      message = offerResult.emailed
+        ? `Offer recorded, signed by the holder, and an email has been sent to ${offerResult.mask}. The instrument is locked until it is accepted, withdrawn or expires.`
+        : `Offer recorded, signed by the holder. The email could not be sent (${offerResult.reason}). Pass the link below to the recipient yourself.`;
+    } else if (kind === 'withdraw') {
+      const open = replay(inst).state.offer;
+      inst = await act(id, expectSeq, { type: 'withdraw', holderSig: f('holderSig') }, adminNumber);
+      if (open) await closeOffer(open.tokenHash);
+      message = 'Offer withdrawn. The link no longer works and the instrument is unlocked.';
     } else if (kind === 'deliver') {
       inst = await act(id, expectSeq, { type: 'deliver', method: f('method'), note: f('note') }, adminNumber);
       message = 'Delivery recorded.';
@@ -106,9 +126,13 @@ const canDiscount = active && !due.onDemand && !!due.date && todayStr < due.date
 // Exchanging needs a live instrument that has not yet passed its maturity date.
 const canExchange = active && (due.onDemand || (!!due.date && due.date >= todayStr));
 const feeQuote = canExchange ? await getFeeQuote(session.accessToken) : null;
+const openOffer = v.state?.offer && Date.parse(v.state.offer.expiresAt) > Date.now() ? v.state.offer : null;
+const canCancel = !v.state?.handedOver; // one way only: once handed over, it can no longer be cancelled
 const link = await linkProblem(inst);
 const exchangeEvent = inst.events.find((e) => e.type === 'exchange')?.data as { newId: string; newSerial: string } | undefined;
 const issuer = issuerLabel(issuerParty(t));
+const EV_LABELS: Record<string, string> = { offer: 'Offered by email', withdraw: 'Offer withdrawn', claim: 'Accepted and delivered', notice: 'Email notice' };
+const evLabel = (t: string) => EV_LABELS[t] ?? t.charAt(0).toUpperCase() + t.slice(1);
 const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei ? ` LEI ${p.lei}` : '') : '—');
 ---
 <Layout title={`${t.serial} — ETD`} noindex>
@@ -133,6 +157,8 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
             <dt>Current holder</dt><dd><strong>{pName(v.state?.holder)}</strong></dd>
             <dt>Delivery</dt>
             <dd>{v.state?.delivered ? `Delivered to ${pName(v.state.delivered.to)} by ${v.state.delivered.method}, ${v.state.delivered.at.slice(0, 10)}` : 'Not yet delivered to the current holder'}</dd>
+            {openOffer && <><dt>Offer</dt><dd>Open to {openOffer.to.name}, until {openOffer.expiresAt.slice(0, 10)}</dd></>}
+            {v.state?.acceptedAt && <><dt>Holder accepted</dt><dd>{v.state.acceptedAt.slice(0, 16).replace('T', ' ')} UTC</dd></>}
             {t.type === 'bill_of_exchange' && <><dt>Acceptance</dt><dd>{v.state?.accepted ? 'Accepted by the drawee' : 'Not yet accepted'}</dd></>}
             {t.replaces && <><dt>Replaces</dt><dd><a href={`/portal/admin/etd/${t.replaces.id}`}>{t.replaces.serial}</a></dd></>}
             {exchangeEvent && <><dt>Exchanged for</dt><dd><a href={`/portal/admin/etd/${exchangeEvent.newId}`}>{exchangeEvent.newSerial}</a></dd></>}
@@ -159,10 +185,63 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
       />
     )}
 
-    {active && (
+    {offerResult && (
+      <div class="panel" style="margin:16px 0">
+        <p class="step-title" style="margin-top:0">One-time link for {offerResult.mask}</p>
+        <p class="note" style="margin:0 0 8px">{offerResult.emailed ? 'This was emailed to them. You can also pass it on yourself, for example by message or in person.' : 'Pass this to the recipient yourself.'} It works once, and shows only while you are on this page, so copy it now.</p>
+        <textarea rows="3" readonly class="mono" onfocus="this.select()" style="width:100%">{offerResult.link}</textarea>
+      </div>
+    )}
+
+    {active && openOffer && (
+      <>
+        <h2>Offer open</h2>
+        <div class="panel">
+          <p style="margin-top:0">This instrument has been offered to <strong>{openOffer.to.name}</strong> ({openOffer.toMask}). It is locked until they accept it, you withdraw the offer, or it expires on <strong>{openOffer.expiresAt.slice(0, 16).replace('T', ' ')} UTC</strong>. Once they accept, it is theirs and cannot be taken back.</p>
+          <form method="post" class="f signed" data-sign="withdraw" data-token-hash={openOffer.tokenHash}>
+            <input type="hidden" name="act" value="withdraw" /><input type="hidden" name="seq" value={last.seq} />
+            <fieldset><legend>Current holder signs to withdraw</legend>
+              <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+              <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+            </fieldset>
+            <input type="hidden" name="holderSig" />
+            <button class="btn btn-outline-dark" type="submit">Withdraw the offer</button>
+          </form>
+        </div>
+      </>
+    )}
+
+    {active && !openOffer && (
       <>
         <h2>Record an act</h2>
         <div class="acts">
+          <details class="act">
+            <summary><span>Send by email <span class="sub">to someone outside the network, signed by the current holder</span></span></summary>
+            <form method="post" class="f signed" data-sign="offer">
+              <input type="hidden" name="act" value="offer" /><input type="hidden" name="seq" value={last.seq} />
+              <input type="hidden" name="token" /><input type="hidden" name="tokenHash" /><input type="hidden" name="expiresAt" />
+              <p class="note" style="margin:0">
+                The recipient gets an email with a secure one-time link. They read the instrument, create their own key, and accept it. Acceptance is the delivery.
+                Until then it is locked and you can withdraw it. The link works for 14 days. <strong>Once they accept, it is theirs: it cannot be recalled or cancelled, and it cannot go back to anyone who held it before.</strong>
+              </p>
+              <label>Recipient's email<input type="email" name="email" required maxlength="254" autocomplete="off" /></label>
+              {t.bearer ? (
+                <input type="hidden" name="toName" value="Bearer" />
+              ) : (
+                <div class="row">
+                  <label>Recipient's name<input name="toName" required maxlength="120" /></label>
+                  <label>Companion No. / ref (optional)<input name="toRef" maxlength="60" /></label>
+                </div>
+              )}
+              <fieldset><legend>Current holder signs the offer</legend>
+                <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+              </fieldset>
+              <input type="hidden" name="holderSig" />
+              <button class="btn" type="submit">Sign and send</button>
+            </form>
+          </details>
+
           <details class="act">
             <summary><span>Transfer to a new holder <span class="sub">signed by the current holder</span></span></summary>
             <form method="post" class="f signed" data-sign="transfer">
@@ -283,15 +362,19 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
             </details>
           )}
 
-          <details class="act">
-            <summary><span>Cancel <span class="sub">permanent</span></span></summary>
-            <form method="post" class="f">
-              <input type="hidden" name="act" value="cancel" /><input type="hidden" name="seq" value={last.seq} />
-              <label>Reason<input name="reason" required maxlength="500" /></label>
-              <label class="chk"><input type="checkbox" name="confirm" value="yes" required /> Cancel permanently. This cannot be undone.</label>
-              <button class="btn danger" type="submit">Cancel instrument</button>
-            </form>
-          </details>
+          {canCancel ? (
+            <details class="act">
+              <summary><span>Cancel <span class="sub">permanent, only until it is first handed over</span></span></summary>
+              <form method="post" class="f">
+                <input type="hidden" name="act" value="cancel" /><input type="hidden" name="seq" value={last.seq} />
+                <label>Reason<input name="reason" required maxlength="500" /></label>
+                <label class="chk"><input type="checkbox" name="confirm" value="yes" required /> Cancel permanently. This cannot be undone.</label>
+                <button class="btn danger" type="submit">Cancel instrument</button>
+              </form>
+            </details>
+          ) : (
+            <p class="note" style="margin:6px 0 0">This instrument has been handed over, so it can no longer be cancelled. It ends when it is paid or exchanged.</p>
+          )}
         </div>
       </>
     )}
@@ -299,10 +382,14 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
     <h2>History</h2>
     <ol class="timeline">
       {inst.events.map((e) => (
-        <li class={['transfer', 'pay', 'rekey'].includes(e.type) ? 'signed' : e.type === 'recover' ? 'witness' : ''}>
-          <strong>{e.type.charAt(0).toUpperCase() + e.type.slice(1)}</strong>
-          {['transfer', 'pay', 'rekey'].includes(e.type) && <span class="tag">holder-signed</span>}
-          {e.type === 'recover' && <span class="tag witness">registry-witnessed</span>}
+        <li class={['transfer', 'pay', 'rekey', 'offer', 'withdraw', 'claim'].includes(e.type) ? 'signed' : ['recover', 'notice'].includes(e.type) ? 'witness' : ''}>
+          <strong>{evLabel(e.type)}</strong>
+          {['transfer', 'pay', 'rekey', 'offer', 'withdraw'].includes(e.type) && <span class="tag">holder-signed</span>}
+          {e.type === 'claim' && <span class="tag">signed by the new holder's key</span>}
+          {['recover', 'notice'].includes(e.type) && <span class="tag witness">registry-witnessed</span>}
+          {e.type === 'offer' && <div>To {(e.data as any).to?.name} ({(e.data as any).toMask}), open until {String((e.data as any).expiresAt).slice(0, 16).replace('T', ' ')} UTC</div>}
+          {e.type === 'claim' && <div>{pName((e.data as any).from)} → {pName((e.data as any).to)}, delivered by email</div>}
+          {e.type === 'notice' && <div>Email to {(e.data as any).toMask}: {(e.data as any).status}{(e.data as any).note ? `. ${(e.data as any).note}` : ''}</div>}
           <div class="when">{e.at.replace('T', ' ').slice(0, 19)} UTC · recorded by {e.by}</div>
           {e.type === 'transfer' && <div>{t.bearer ? 'Passed to a new bearer' : `${pName((e.data as any).from)} → ${pName((e.data as any).to)}`}</div>}
           {e.type === 'deliver' && <div>{(e.data as any).method}</div>}
@@ -328,7 +415,7 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
   window.__etd = { docId, docPrev, docSeq };
 </script>
 <script>
-  import { actMessage, signWithKeyFile } from '../../../../../lib/etd-client';
+  import { actMessage, randomToken, sha256Hex, signWithKeyFile } from '../../../../../lib/etd-client';
   import { amountInWords } from '../../../../../lib/amount-words';
   import { convertCents, formatCents, formatFxRate, isDayCount, parseCents, parseFxRate, valueToday } from '../../../../../lib/maturity';
   const ctx = (window as any).__etd as { docId: string; docPrev: string; docSeq: string };
@@ -382,14 +469,29 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
       ev.preventDefault();
       const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement | null)?.value.trim() ?? '';
       const type = form.dataset.sign!;
-      const args =
-        type === 'transfer'
-          ? [val('toName'), val('toRef'), val('toKey')]
-          : type === 'rekey'
-            ? [val('newKey')]
-            : type === 'exchange'
-              ? (JSON.parse(form.dataset.sigArgs ?? 'null') as string[] | null) ?? []
-              : [];
+      const setField = (n: string, v: string) => ((form.elements.namedItem(n) as HTMLInputElement).value = v);
+      let args: string[];
+      if (type === 'offer') {
+        // A fresh one-time code, made here. The holder signs its fingerprint; the code itself goes only into the link.
+        const token = randomToken();
+        const tokenHash = await sha256Hex(token);
+        const expiresAt = new Date(Date.now() + 14 * 864e5).toISOString();
+        setField('token', token);
+        setField('tokenHash', tokenHash);
+        setField('expiresAt', expiresAt);
+        args = [tokenHash, expiresAt, val('toName'), val('toRef')];
+      } else if (type === 'withdraw') {
+        args = [form.dataset.tokenHash ?? ''];
+      } else {
+        args =
+          type === 'transfer'
+            ? [val('toName'), val('toRef'), val('toKey')]
+            : type === 'rekey'
+              ? [val('newKey')]
+              : type === 'exchange'
+                ? (JSON.parse(form.dataset.sigArgs ?? 'null') as string[] | null) ?? []
+                : [];
+      }
       if (type === 'exchange' && args.length !== 3) {
         alert('Enter the new currency and a valid agreed rate first.');
         return;

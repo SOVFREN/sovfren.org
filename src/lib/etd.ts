@@ -54,7 +54,24 @@ import {
 } from './maturity';
 
 export type InstrumentType = 'promissory_note' | 'bill_of_exchange';
-export type EventType = 'issue' | 'transfer' | 'deliver' | 'accept' | 'pay' | 'cancel' | 'rekey' | 'recover' | 'exchange';
+export type EventType =
+  | 'issue'
+  | 'transfer'
+  | 'deliver'
+  | 'accept'
+  | 'pay'
+  | 'cancel'
+  | 'rekey'
+  | 'recover'
+  | 'exchange'
+  | 'offer' // holder offers it to someone outside, by a one-time link (holder-signed)
+  | 'withdraw' // holder takes back an offer that has not been claimed (holder-signed)
+  | 'claim' // the person offered it accepts and takes delivery (signed by their new key)
+  | 'notice'; // registry's record of a notice sent, e.g. the email (no effect on ownership)
+
+// One-way rules (no cancelling after handover, no returning to a former holder) apply to events
+// recorded from this moment, so instruments and histories made before they existed still verify.
+export const ONE_WAY_FROM = '2026-11-26T15:30:00.000Z';
 export type Status = 'active' | 'paid' | 'cancelled' | 'exchanged';
 
 export interface Party {
@@ -141,6 +158,13 @@ export interface State {
   holderKey: string;
   accepted: boolean;
   delivered?: { to: Party; at: string; method: string };
+  // An open offer to send it to someone outside by email. While open, nothing else can be done with the instrument.
+  // It lapses by itself once its time has passed.
+  offer?: { tokenHash: string; expiresAt: string; to: Party; toMask: string; at: string };
+  handedOver: boolean; // true once delivered, transferred or claimed: from then on it can no longer be cancelled
+  past: Party[]; // those who held it before, and have passed it on
+  pastKeys: string[];
+  acceptedAt?: string; // when the current holder accepted it by claiming
   headHash: string;
 }
 
@@ -506,16 +530,81 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
 // ---------- state machine (shared by apply and verify) ----------
 
 function initialState(terms: Terms, docHash: string): State {
-  return { status: 'active', holder: terms.payee, holderKey: terms.payeeKey, accepted: false, headHash: docHash };
+  return { status: 'active', holder: terms.payee, holderKey: terms.payeeKey, accepted: false, handedOver: false, past: [], pastKeys: [], headHash: docHash };
+}
+
+const HEX64 = /^[0-9a-f]{64}$/;
+
+// Has this person (or key) held the instrument before? Commerce moves forward: it cannot come back to an earlier
+// holder, except to the maker or drawer, which is what pays it off.
+function heldBefore(terms: Terms, s: State, to: Party, toKey: string): boolean {
+  if (s.pastKeys.includes(toKey)) return true;
+  if (terms.bearer) return false;
+  const issuer = terms.maker ?? terms.drawer;
+  return s.past.some((p) => sameParty(p, to)) && !(issuer && sameParty(issuer, to));
 }
 
 // Returns an error string if the event is not legal in this state, else mutates state.
 function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null {
   if (s.status !== 'active') return `event ${e.seq}: instrument is already ${s.status}`;
   const d = e.data as Record<string, any>;
+  const oneWay = e.at >= ONE_WAY_FROM;
+  if (s.offer && e.at > s.offer.expiresAt) s.offer = undefined; // the offer ran out of time, unclaimed
+  if (s.offer && !['withdraw', 'claim', 'notice', 'cancel'].includes(e.type)) {
+    return `event ${e.seq}: an offer to send this instrument is open; withdraw it or wait for it to be claimed or expire`;
+  }
   switch (e.type) {
     case 'issue':
       return `event ${e.seq}: unexpected issue event`;
+    case 'offer': {
+      const to = d.to as Party;
+      const tokenHash = String(d.tokenHash ?? '');
+      const expiresAt = String(d.expiresAt ?? '');
+      if (!to?.name) return `event ${e.seq}: an offer needs a recipient`;
+      if (terms.bearer && (to.name !== BEARER_NAME || to.ref || to.lei || to.bic)) return `event ${e.seq}: a bearer note is offered to the bearer`;
+      if (!HEX64.test(tokenHash)) return `event ${e.seq}: offer has no valid code`;
+      const expiry = Date.parse(expiresAt);
+      const now = Date.parse(e.at);
+      if (Number.isNaN(expiry) || expiry <= now || expiry > now + 31 * 864e5) return `event ${e.seq}: offer expiry must be within 31 days`;
+      if (oneWay && !terms.bearer && s.past.some((p) => sameParty(p, to)) && !sameParty(terms.maker ?? terms.drawer ?? { name: '' }, to)) {
+        return `event ${e.seq}: ${to.name} has held this instrument before; it cannot go back`;
+      }
+      const msg = actMessage(docId, e.seq, e.prevHash, 'offer', [tokenHash, expiresAt, to.name, to.ref ?? '']);
+      if (!holderSigOk(s.holderKey, msg, d.holderSig)) return `event ${e.seq}: offer is not signed by the current holder's key`;
+      s.offer = { tokenHash, expiresAt, to, toMask: String(d.toMask ?? '').slice(0, 80), at: e.at };
+      return null;
+    }
+    case 'withdraw': {
+      if (!s.offer) return `event ${e.seq}: there is no open offer to withdraw`;
+      if (!holderSigOk(s.holderKey, actMessage(docId, e.seq, e.prevHash, 'withdraw', [s.offer.tokenHash]), d.holderSig))
+        return `event ${e.seq}: withdrawal is not signed by the current holder's key`;
+      s.offer = undefined;
+      return null;
+    }
+    case 'claim': {
+      if (!s.offer) return `event ${e.seq}: there is no open offer to claim`;
+      const token = String(d.token ?? '');
+      if (sha256(token) !== s.offer.tokenHash) return `event ${e.seq}: claim does not carry the offer's code`;
+      const toKey = String(d.toKey ?? '');
+      if (!validHolderKey(toKey)) return `event ${e.seq}: new holder has no valid public key`;
+      const to = s.offer.to;
+      // The person receiving it signs their own acceptance with the new key: it covers who, which key and which offer.
+      const msg = actMessage(docId, e.seq, e.prevHash, 'claim', [to.name, to.ref ?? '', toKey, s.offer.tokenHash]);
+      if (!holderSigOk(toKey, msg, d.acceptSig)) return `event ${e.seq}: acceptance is not signed by the new holder's key`;
+      if (toKey === s.holderKey) return `event ${e.seq}: transfer to the same key`;
+      if (oneWay && heldBefore(terms, s, to, toKey)) return `event ${e.seq}: that holder has held this instrument before; it cannot go back`;
+      s.past.push(s.holder);
+      s.pastKeys.push(s.holderKey);
+      s.holder = to;
+      s.holderKey = toKey;
+      s.delivered = { to, at: e.at, method: 'email' };
+      s.acceptedAt = e.at;
+      s.handedOver = true;
+      s.offer = undefined;
+      return null;
+    }
+    case 'notice':
+      return null;
     case 'transfer': {
       const from = d.from as Party, to = d.to as Party;
       if (!from?.name || !to?.name) return `event ${e.seq}: transfer needs from and to`;
@@ -529,9 +618,13 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
       if (!validHolderKey(toKey)) return `event ${e.seq}: new holder has no valid public key`;
       const msg = actMessage(docId, e.seq, e.prevHash, 'transfer', [to.name, to.ref ?? '', toKey]);
       if (!holderSigOk(s.holderKey, msg, d.holderSig)) return `event ${e.seq}: transfer is not signed by the current holder's key`;
+      if (oneWay && heldBefore(terms, s, to, toKey)) return `event ${e.seq}: that holder has held this instrument before; it cannot go back`;
+      s.past.push(s.holder);
+      s.pastKeys.push(s.holderKey);
       s.holder = to;
       s.holderKey = toKey;
       s.delivered = undefined; // the new holder has not yet received it
+      s.handedOver = true;
       return null;
     }
     case 'deliver': {
@@ -539,6 +632,7 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
       if (!to?.name) return `event ${e.seq}: delivery needs a recipient`;
       if (!sameParty(to, s.holder)) return `event ${e.seq}: delivery must be to the current holder`;
       s.delivered = { to, at: e.at, method: String(d.method ?? '') };
+      s.handedOver = true;
       return null;
     }
     case 'accept':
@@ -583,7 +677,10 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
     }
     case 'cancel':
       if (!String(d.reason ?? '').trim()) return `event ${e.seq}: cancellation needs a reason`;
+      // One way only: once it has been handed over, nobody can pull it back. It ends by being paid or exchanged.
+      if (oneWay && s.handedOver) return `event ${e.seq}: this instrument has been handed over and can no longer be cancelled`;
       s.status = 'cancelled';
+      s.offer = undefined;
       return null;
     default:
       return `event ${e.seq}: unknown type`;
@@ -650,7 +747,11 @@ type Action =
   | { type: 'pay'; note?: string; holderSig: string }
   | { type: 'cancel'; reason: string }
   | { type: 'rekey'; newKey: string; holderSig: string }
-  | { type: 'recover'; newKey: string; reason: string };
+  | { type: 'recover'; newKey: string; reason: string }
+  | { type: 'offer'; to: Party; toMask: string; tokenHash: string; expiresAt: string; holderSig: string }
+  | { type: 'withdraw'; holderSig: string }
+  | { type: 'claim'; token: string; toKey: string; acceptSig: string }
+  | { type: 'notice'; status: string; toMask: string; note?: string };
 
 // Appends one event. `expectSeq` is the sequence number the caller saw; if
 // anything else has been recorded since, the action is refused (no double spend).
@@ -687,6 +788,26 @@ export async function act(id: string, expectSeq: number, action: Action, by: str
         break;
       case 'recover':
         data = { newKey: cleanKey(action.newKey, 'New key'), reason: action.reason.trim().slice(0, 500) };
+        break;
+      case 'offer':
+        data = {
+          from: v.state.holder,
+          to: inst.terms.bearer ? { name: BEARER_NAME } : cleanParty(action.to, 'Recipient'),
+          toMask: action.toMask,
+          tokenHash: action.tokenHash,
+          expiresAt: action.expiresAt,
+          holderSig: action.holderSig,
+        };
+        break;
+      case 'withdraw':
+        data = { holderSig: action.holderSig };
+        break;
+      case 'claim':
+        if (!v.state.offer) throw new Error('This offer is no longer open.');
+        data = { from: v.state.holder, to: v.state.offer.to, token: action.token, toKey: cleanKey(action.toKey, 'Your public key'), acceptSig: action.acceptSig };
+        break;
+      case 'notice':
+        data = { channel: 'email', status: action.status, toMask: action.toMask, ...(action.note ? { note: action.note.slice(0, 200) } : {}) };
         break;
     }
     const event = await makeEvent(last.seq + 1, action.type, by, data, last.hash);
@@ -802,6 +923,7 @@ export async function exchangeInstrument(
     const last = inst.events[inst.events.length - 1];
     if (last.seq !== expectSeq) throw new Error('This instrument changed since you loaded it. Reload and try again.');
     if (!input.debtorAgreed) throw new Error('Confirm that the issuer has agreed to this exchange.');
+    if (v.state.offer && Date.parse(v.state.offer.expiresAt) > Date.now()) throw new Error('An offer to send this instrument is open. Withdraw it first.');
 
     const t = inst.terms;
     const newCurrency = input.newCurrency.trim().toUpperCase();

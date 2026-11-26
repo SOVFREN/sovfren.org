@@ -108,6 +108,29 @@ if (gate instanceof Response) return gate;
       how it is treated. This guide is not legal advice. Have a lawyer in the relevant country check the wording before relying on an instrument for large sums or across borders.
     </p>
 
+    <h2 id="send">Sending an instrument to someone outside the network</h2>
+    <p>
+      A holder can send an instrument to anyone with an email address, whether or not they are a Companion. On the instrument, open
+      <strong>Send by email</strong>, enter the recipient's email and name, and the holder signs the offer with their key file. The recipient is emailed a
+      <strong>secure one-time link</strong> (the email itself says nothing about the amount). They open it without needing an account, read the instrument,
+      create their own key, and <strong>accept</strong>. Their acceptance is signed with their new key, and that is the delivery. It is recorded in the history.
+    </p>
+    <ul>
+      <li><strong>Locked while offered.</strong> Until the recipient accepts it, the sender withdraws it, or 14 days pass, nothing else can be done with the instrument. That stops it being promised twice.</li>
+      <li><strong>Accepted, not declined.</strong> There is no way to decline. An instrument is accepted and honoured so that it can be held, traded, discounted before it falls due, or presented to a clearing house for cash. If an offer is never accepted, the sender withdraws it or it lapses, and nothing has been accepted or dishonoured.</li>
+      <li><strong>One way only.</strong> Once accepted it cannot be recalled. From then on it <strong>cannot be cancelled</strong>; it ends only when it is paid or exchanged. It <strong>cannot go back to someone who held it before</strong>, except to the maker or drawer, which pays it off. These rules apply to everything recorded from 26 November 2026, 15:30 UTC.</li>
+      <li><strong>If the email does not arrive.</strong> The page shows the one-time link after sending, so the sender can pass it on by message or in person. Email "accepted by the server" is not delivery; only the recipient's acceptance is.</li>
+      <li><strong>Privacy.</strong> The recipient's email address is kept only in the registry's private store and is deleted when the offer ends. The history shows a masked version, such as b***@e***.com.</li>
+      <li><strong>Limits.</strong> Each person can send up to 20 offers a day.</li>
+    </ul>
+    <h3>Setting up email so it is not blocked (once)</h3>
+    <ol>
+      <li>Create a free or paid transactional email account (this is built for Postmark) and add a sending <strong>subdomain</strong>, such as <code>notify.sovfren.org</code>.</li>
+      <li>Add the SPF and DKIM records the provider gives you to the DNS for that subdomain, and add a DMARC record. Wait until the provider shows the domain as verified.</li>
+      <li>On the server, set <code>POSTMARK_TOKEN</code> and <code>MAIL_FROM</code> (an address on the verified subdomain) in the <code>.env</code> file, then rebuild and restart. Without them, nothing is emailed and the link is shown for you to pass on.</li>
+      <li>Keep messages as they are: short, plain, one link on our own domain, no attachments.</li>
+    </ol>
+
     <h3>Pay to the bearer (promissory notes)</h3>
     <p>
       When issuing a promissory note, the maker chooses either <strong>A named payee</strong> or <strong>The bearer</strong>. A bearer note is

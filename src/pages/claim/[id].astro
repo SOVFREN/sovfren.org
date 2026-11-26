@@ -1,0 +1,146 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../layouts/Layout.astro';
+import InstrumentDocument from '../../components/InstrumentDocument.astro';
+import '../../styles/etd.css';
+import { act, getInstrument, verifyInstrument } from '../../lib/etd';
+import { closeOffer, offerFor, tooManyTries } from '../../lib/etd-send';
+
+// Public page for someone outside the network who was sent an instrument by email. No account needed.
+// The link carries a one-time code. They read the instrument, then either accept it (creating their own key,
+// which signs their acceptance: that is the delivery). There is no decline: an instrument is accepted and honoured
+// so that it can be held, traded, discounted or cleared. Nothing is revealed without a valid code.
+const id = Astro.params.id ?? '';
+let ip = Astro.request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';
+if (!ip) {
+  try {
+    ip = Astro.clientAddress;
+  } catch {
+    ip = 'unknown';
+  }
+}
+if (tooManyTries(ip)) return new Response('Too many attempts. Please try again in a few minutes.', { status: 429, headers: { 'Cache-Control': 'no-store' } });
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+
+let token = new URL(Astro.request.url).searchParams.get('t') ?? '';
+let inst = await getInstrument(id);
+let outcome: 'view' | 'claimed' = 'view';
+let error: string | null = null;
+
+if (Astro.request.method === 'POST') {
+  if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
+  const form = await Astro.request.formData();
+  const f = (k: string) => String(form.get(k) ?? '');
+  token = f('token');
+  try {
+    const open = inst ? offerFor(inst, token) : null;
+    if (!inst || !open) throw new Error('This link has already been used, has been withdrawn, or has expired.');
+    const expectSeq = Number(f('seq'));
+    if (!Number.isInteger(expectSeq)) throw new Error('Bad request.');
+    if (f('act') === 'claim') {
+      inst = await act(id, expectSeq, { type: 'claim', token, toKey: f('toKey'), acceptSig: f('acceptSig') }, 'recipient');
+      await closeOffer(open.tokenHash);
+      outcome = 'claimed';
+    } else throw new Error('Unknown action.');
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not complete that.';
+    inst = await getInstrument(id);
+  }
+}
+
+const open = outcome === 'view' && inst ? offerFor(inst, token) : null;
+const v = inst ? await verifyInstrument(inst) : null;
+const last = inst?.events[inst.events.length - 1];
+const qr = outcome === 'view' && open ? await QRCode.toDataURL(new URL(Astro.url.origin).href, { margin: 2, width: 160 }) : '';
+---
+<Layout title="An instrument shared with you" noindex>
+  <section class="wrap etd">
+    <header class="page-head">
+      <span class="eyebrow">Sovfren Society · Electronic Trade Register</span>
+      <h1>An instrument shared with you</h1>
+    </header>
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+
+    {outcome === 'claimed' && (
+      <div class="panel">
+        <p class="msg ok"><strong>You have accepted this instrument.</strong> Delivery has been recorded in the register, signed with your key.</p>
+        <p>You are now its holder. Your <strong>key file</strong>, which downloaded to your device a moment ago, is the only proof that you hold it. Keep it and its passphrase safe, and keep a backup copy. If it is lost, the instrument is stuck until the register can verify you in person.</p>
+        <p>To pass the instrument on, or to record payment, you sign with your key file. Contact the Sovfren Society administrator who sent it to you for help with that.</p>
+      </div>
+    )}
+
+    {outcome === 'view' && !open && !error && (
+      <div class="panel"><p>This link is not valid. It may have already been used, been withdrawn by the sender, or expired. If you were expecting an instrument, please ask the sender to send it again.</p></div>
+    )}
+
+    {outcome === 'view' && !open && error && (
+      <div class="panel"><p>If you were expecting an instrument, please ask the sender to send it again.</p></div>
+    )}
+
+    {outcome === 'view' && open && inst && v && last && (
+      <>
+        {!v.ok && <div class="msg bad" role="alert"><strong>This instrument failed verification. Do not accept it.</strong></div>}
+        <p class="note">
+          Please read the instrument below. By accepting it you take it as its holder: you can hold it until it is paid, trade it on, sell it at a discount before it falls due,
+          or present it to a clearing house for cash. <strong>Once accepted it cannot be taken back.</strong>
+        </p>
+        <InstrumentDocument inst={inst} state={v.state} verified={v.ok} qr={qr} />
+
+        {v.ok && (
+          <>
+            <h2>Accept this instrument</h2>
+            <form method="post" id="claim" class="f panel"
+              data-id={inst.id} data-seq={last.seq + 1} data-prev={last.hash} data-name={open.to.name} data-ref={open.to.ref ?? ''} data-token-hash={open.tokenHash}>
+              <input type="hidden" name="act" value="claim" />
+              <input type="hidden" name="seq" value={last.seq} />
+              <input type="hidden" name="token" value={token} />
+              <input type="hidden" name="toKey" />
+              <input type="hidden" name="acceptSig" />
+              <p class="note" style="margin:0">Your <strong>key file</strong> is made in this browser and never sent to us. You will use it to prove you hold the instrument. A passphrase is strongly recommended.</p>
+              <label>Passphrase<input type="password" id="pass" autocomplete="new-password" /></label>
+              <label>Repeat passphrase<input type="password" id="pass2" autocomplete="new-password" /></label>
+              <label class="chk"><input type="checkbox" id="agree" required /> I have read this instrument. I accept it, and I take delivery of it as its holder.</label>
+              <button class="btn" type="submit">Create my key and accept</button>
+            </form>
+          </>
+        )}
+      </>
+    )}
+  </section>
+</Layout>
+
+<script>
+  import { actMessage, generateKeyFile, signWithKeyFile } from '../../lib/etd-client';
+  const claim = document.getElementById('claim') as HTMLFormElement | null;
+  if (claim) {
+    const d = claim.dataset as { id: string; seq: string; prev: string; name: string; ref: string; tokenHash: string };
+    claim.addEventListener('submit', async (ev) => {
+      if (claim.dataset.done) return;
+      ev.preventDefault();
+      const pass = (document.getElementById('pass') as HTMLInputElement).value;
+      try {
+        if (pass !== (document.getElementById('pass2') as HTMLInputElement).value) throw new Error('The passphrases do not match.');
+        if (!pass && !confirm('Create the key without a passphrase? Anyone who gets the file can use it.')) return;
+        const { publicKey, file } = await generateKeyFile(pass);
+        // Save the key file first, so it can never be lost between accepting and the page reloading.
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([file], { type: 'application/json' }));
+        a.download = `etd-key-${publicKey.slice(0, 8).replace(/[^A-Za-z0-9]/g, '_')}.json`;
+        a.click();
+        if (!confirm('Your key file has been downloaded. Please check that it has saved. It is the only proof you hold this instrument. Continue and accept?')) return;
+        const { sig } = await signWithKeyFile(file, pass, actMessage(d.id, d.seq, d.prev, 'claim', [d.name, d.ref, publicKey, d.tokenHash]));
+        (claim.elements.namedItem('toKey') as HTMLInputElement).value = publicKey;
+        (claim.elements.namedItem('acceptSig') as HTMLInputElement).value = sig;
+        claim.dataset.done = '1';
+        claim.submit();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Could not create your key.');
+      }
+    });
+  }
+</script>

@@ -15,6 +15,8 @@ interface ImportMetaEnv {
   readonly ETD_DIR?: string;
   readonly ETD_SIGNING_KEY?: string;
   readonly ETD_DEFAULT_LIMIT?: string;
+  readonly POSTMARK_TOKEN?: string;
+  readonly MAIL_FROM?: string;
 }
 
 interface ImportMeta {

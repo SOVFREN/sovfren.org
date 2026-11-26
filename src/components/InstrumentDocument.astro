@@ -48,7 +48,7 @@ const accrued =
     ? maturityValue(t.amount, t.interestRate, dayCount, t.issuedAt, todayStr)
     : null;
 const daily = t.interestRate && onDemand ? perDiem(t.amount, t.interestRate, dayCount) : null;
-const endorsements = inst.events.filter((e) => e.type === 'transfer');
+const endorsements = inst.events.filter((e) => e.type === 'transfer' || e.type === 'claim');
 const sum = `${t.currency} ${money(t.amount)}`;
 // With a symbol: "£10,000.00" (or "10,000.00 ₹"); the code is always shown alongside, since "$" is many currencies.
 const figure = t.currencySymbol
