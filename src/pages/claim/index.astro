@@ -1,0 +1,48 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import '../../styles/etd.css';
+import { findBySerial, offerFor, tooManyTries } from '../../lib/etd-send';
+
+// For someone holding a printed claim slip who would rather type than scan the QR code.
+// They enter the instrument number and the code from the slip. A wrong pair always gets the same answer,
+// whether the number exists or not, so this cannot be used to find instruments.
+let ip = Astro.request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';
+if (!ip) {
+  try {
+    ip = Astro.clientAddress;
+  } catch {
+    ip = 'unknown';
+  }
+}
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+
+let error: string | null = null;
+if (Astro.request.method === 'POST') {
+  if (tooManyTries(ip, 15)) return new Response('Too many attempts. Please try again in a few minutes.', { status: 429, headers: { 'Cache-Control': 'no-store' } });
+  if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
+  const form = await Astro.request.formData();
+  const serial = String(form.get('serial') ?? '');
+  const code = String(form.get('code') ?? '').replace(/[\s-]+/g, '').toLowerCase();
+  const inst = await findBySerial(serial);
+  if (inst && offerFor(inst, code)) return Astro.redirect(`/claim/${inst.id}?t=${code}`, 303);
+  error = 'That instrument number and code do not match an open offer. Check them against your claim slip. The slip may also have been used, withdrawn or expired.';
+}
+---
+<Layout title="Accept an instrument" noindex>
+  <section class="wrap etd">
+    <header class="page-head">
+      <span class="eyebrow">Sovfren Society · Electronic Trade Register</span>
+      <h1>Accept an instrument</h1>
+      <p class="lead">Enter the instrument number and the code printed on your claim slip. If you have the slip, you can also scan its QR code.</p>
+    </header>
+    {error && <p role="alert" class="msg bad">{error}</p>}
+    <form method="post" class="f panel">
+      <label>Instrument number<input name="serial" required placeholder="ETD-2026-000001" autocomplete="off" style="text-transform:uppercase" /></label>
+      <label>Code from the slip<input name="code" required autocomplete="off" class="mono" placeholder="8 groups of 8 letters and numbers" /></label>
+      <button class="btn" type="submit">Continue</button>
+    </form>
+  </section>
+</Layout>

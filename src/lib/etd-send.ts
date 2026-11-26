@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { act, getInstrument, replay, root, type Instrument } from './etd';
+import { act, getInstrument, listInstruments, replay, root, type Instrument } from './etd';
 import { mailConfigured, offerEmail, sendMail } from './mail';
 
 const outDir = () => path.join(root(), 'outbox');
@@ -28,9 +28,14 @@ export function maskEmail(email: string): string {
 
 interface OutboxEntry {
   instrument: string;
-  email: string;
+  email?: string; // email offers
   by: string;
   createdAt: string;
+  // Postal offers: where to send it. Kept only here, in the registry's private store, until the offer ends.
+  channel?: 'post';
+  token?: string; // so the claim slip can be reprinted (a postal pack can jam or go missing)
+  addressee?: string;
+  address?: PostAddress;
 }
 
 async function sentToday(by: string): Promise<number> {
@@ -134,4 +139,137 @@ export function tooManyTries(ip: string, max = 30, windowMs = 10 * 60_000): bool
   recent.push(now);
   hits.set(ip, recent);
   return recent.length > max;
+}
+
+// ---------- print and recorded delivery ----------
+// The same offer and claim as email, but the one-time code is printed on a claim slip and posted with a copy of the
+// instrument by recorded delivery. The registry records each step (requested, printed, posted with its tracking number,
+// delivered) in the instrument's history. The recipient then claims online with the slip; acceptance is the delivery.
+
+export interface PostAddress {
+  line1: string;
+  line2?: string;
+  town: string;
+  postcode?: string;
+  country: string;
+}
+
+export interface PostInput {
+  addressee: string; // who the letter is addressed to
+  toName: string; // who the instrument is offered to ("Bearer" for a bearer note)
+  toRef?: string;
+  address: PostAddress;
+  token: string;
+  tokenHash: string;
+  expiresAt: string;
+  holderSig: string;
+}
+
+const tidy = (v: unknown, max: number) => String(v ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, max);
+
+export async function sendByPost(id: string, expectSeq: number, input: PostInput, by: string): Promise<Instrument> {
+  const addressee = tidy(input.addressee, 120);
+  const a: PostAddress = {
+    line1: tidy(input.address.line1, 100),
+    ...(tidy(input.address.line2, 100) ? { line2: tidy(input.address.line2, 100) } : {}),
+    town: tidy(input.address.town, 60),
+    ...(tidy(input.address.postcode, 20) ? { postcode: tidy(input.address.postcode, 20) } : {}),
+    country: tidy(input.address.country, 60),
+  };
+  if (!addressee || !a.line1 || !a.town || !a.country) throw new Error('Enter the name and postal address (first line, town and country).');
+  if (!HEX64.test(input.token) || !HEX64.test(input.tokenHash) || sha256(input.token) !== input.tokenHash) {
+    throw new Error('The one-time code was not made properly. Reload the page and try again.');
+  }
+  if ((await sentToday(by)) >= DAILY_LIMIT) throw new Error('You have reached the limit of offers for today. Try again tomorrow.');
+
+  const mask = `${a.town}, ${a.country}`;
+  const inst = await act(
+    id,
+    expectSeq,
+    { type: 'offer', channel: 'post', to: { name: input.toName, ...(input.toRef?.trim() ? { ref: input.toRef.trim() } : {}) }, toMask: mask, tokenHash: input.tokenHash, expiresAt: input.expiresAt, holderSig: input.holderSig },
+    by,
+  );
+
+  await mkdir(outDir(), { recursive: true });
+  const entry: OutboxEntry = { instrument: id, channel: 'post', token: input.token, addressee, address: a, by, createdAt: new Date().toISOString() };
+  await writeFile(path.join(outDir(), `${input.tokenHash}.json`), JSON.stringify(entry), { mode: 0o600 });
+  try {
+    return await act(id, inst.events[inst.events.length - 1].seq, { type: 'notice', channel: 'post', status: 'requested', toMask: mask }, 'registry');
+  } catch {
+    return inst; // the offer stands even if this record could not be added
+  }
+}
+
+export interface PostJob {
+  tokenHash: string;
+  instrument: string;
+  token: string;
+  addressee: string;
+  address: PostAddress;
+  by: string;
+  createdAt: string;
+}
+
+export async function getPostJob(tokenHash: string): Promise<PostJob | null> {
+  if (!HEX64.test(tokenHash)) return null;
+  try {
+    const e = JSON.parse(await readFile(path.join(outDir(), `${tokenHash}.json`), 'utf8')) as OutboxEntry;
+    if (e.channel !== 'post' || !e.token || !e.addressee || !e.address) return null;
+    return { tokenHash, instrument: e.instrument, token: e.token, addressee: e.addressee, address: e.address, by: e.by, createdAt: e.createdAt };
+  } catch {
+    return null;
+  }
+}
+
+/** Where a postal offer has got to, from the history: the latest postal step recorded since it was offered. */
+export function postProgress(inst: Instrument) {
+  let offerAt = -1;
+  inst.events.forEach((e, i) => {
+    if (e.type === 'offer' && (e.data as { channel?: string }).channel === 'post') offerAt = i;
+  });
+  if (offerAt < 0) return null;
+  const steps = inst.events
+    .slice(offerAt)
+    .filter((e) => e.type === 'notice' && (e.data as { channel?: string }).channel === 'post')
+    .map((e) => ({ at: e.at, ...(e.data as { status: string; carrier?: string; tracking?: string; note?: string; toMask: string }) }));
+  const latest = steps[steps.length - 1];
+  const withTracking = [...steps].reverse().find((s) => s.tracking);
+  return {
+    steps,
+    status: latest?.status ?? 'requested',
+    carrier: withTracking?.carrier,
+    tracking: withTracking?.tracking,
+    toMask: (inst.events[offerAt].data as { toMask?: string }).toMask ?? '',
+  };
+}
+
+export async function recordPostStep(
+  id: string,
+  step: string,
+  extra: { carrier?: string; tracking?: string; note?: string },
+  by: string,
+): Promise<Instrument> {
+  const inst = await getInstrument(id);
+  if (!inst) throw new Error('Not found.');
+  const p = postProgress(inst);
+  if (!p) throw new Error('This instrument has not been offered by post.');
+  return act(id, inst.events[inst.events.length - 1].seq, { type: 'notice', channel: 'post', status: step, toMask: p.toMask, ...extra }, by);
+}
+
+/** Every instrument that has an open postal offer, for the postal queue. */
+export async function listPostQueue() {
+  const rows = [];
+  for (const inst of await listInstruments()) {
+    const st = replay(inst).state;
+    const p = postProgress(inst);
+    if (p && st.offer?.channel === 'post' && st.status === 'active') rows.push({ inst, offer: st.offer, progress: p });
+  }
+  return rows.sort((x, y) => x.offer.at.localeCompare(y.offer.at));
+}
+
+/** Finds an instrument by its printed serial number (ETD-2026-000001), for the claim page. */
+export async function findBySerial(serial: string): Promise<Instrument | null> {
+  const s = serial.trim().toUpperCase();
+  if (!/^ETD-\d{4}-\d{6}$/.test(s)) return null;
+  return (await listInstruments()).find((i) => i.terms.serial === s) ?? null;
 }

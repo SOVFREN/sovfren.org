@@ -1,0 +1,57 @@
+---
+export const prerender = false;
+
+import Layout from '../../../../layouts/Layout.astro';
+import '../../../../styles/etd.css';
+import { requireAdmin } from '../../../../lib/admin';
+import { listPostQueue } from '../../../../lib/etd-send';
+
+// The postal queue: every instrument with an open print-and-post offer, and where each has got to.
+const gate = await requireAdmin(Astro);
+if (gate instanceof Response) return gate;
+
+const rows = await listPostQueue();
+const label: Record<string, string> = {
+  requested: 'To print',
+  printed: 'To post',
+  posted: 'In the post',
+  delivered: 'Delivered, awaiting acceptance',
+  returned: 'Returned',
+};
+---
+<Layout title="Postal queue" noindex>
+  <section class="wrap etd">
+    <header class="page-head">
+      <span class="eyebrow">Sovfren Society · Trade Register</span>
+      <h1>Postal queue</h1>
+      <p class="lead">Instruments being printed and sent by recorded delivery. Open one to print its pack and record each step.</p>
+      <nav class="etd-nav" aria-label="Trade documents">
+        <a href="/portal/admin/etd">Instruments</a>
+        <a href="/portal/admin/etd/post" aria-current="page">Postal queue</a>
+        <a href="/portal/admin/etd/help#send">User guide</a>
+      </nav>
+    </header>
+
+    {rows.length === 0 ? (
+      <div class="panel empty">Nothing is waiting to be posted.</div>
+    ) : (
+      <div class="table-card">
+        <table class="stack">
+          <thead><tr><th>Instrument</th><th>To</th><th>Step</th><th>Tracking</th><th>Offer ends</th><th></th></tr></thead>
+          <tbody>
+            {rows.map(({ inst, offer, progress }) => (
+              <tr>
+                <td data-label="Instrument"><a href={`/portal/admin/etd/${inst.id}`}>{inst.terms.serial}</a></td>
+                <td data-label="To">{offer.to.name}<br /><small>{progress.toMask}</small></td>
+                <td data-label="Step"><span class={`pill ${progress.status === 'returned' ? 'cancelled' : 'active'}`}>{label[progress.status] ?? progress.status}</span></td>
+                <td data-label="Tracking">{progress.tracking ? <span class="mono">{progress.tracking}</span> : '—'}</td>
+                <td data-label="Offer ends">{offer.expiresAt.slice(0, 10)}</td>
+                <td><a href={`/portal/admin/etd/${inst.id}/post-pack`} target="_blank">Print pack</a></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+</Layout>

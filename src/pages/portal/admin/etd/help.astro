@@ -123,6 +123,21 @@ if (gate instanceof Response) return gate;
       <li><strong>Privacy.</strong> The recipient's email address is kept only in the registry's private store and is deleted when the offer ends. The history shows a masked version, such as b***@e***.com.</li>
       <li><strong>Limits.</strong> Each person can send up to 20 offers a day.</li>
     </ul>
+    <h3>Print and recorded delivery</h3>
+    <p>
+      For someone without email, or who should have a paper copy, use <strong>Print and send by recorded delivery</strong> on the instrument. The holder enters who it is for and their postal
+      address, and signs the offer. The registry then makes a <strong>print pack</strong>: a cover letter, an information copy of the instrument, and a <strong>claim slip</strong> with a QR code and the one-time code.
+      Print it, post it by recorded delivery, and record each step on the instrument page (or from the <a href="/portal/admin/etd/post">Postal queue</a>): <strong>printed</strong>,
+      <strong>posted</strong> (with the carrier and tracking number), <strong>delivered</strong> (signed for), or <strong>returned</strong>. Each step is a witnessed entry in the instrument's history, so it is tracked from start to finish.
+    </p>
+    <ul>
+      <li><strong>The paper is only a copy.</strong> Owning the printed copy gives no rights. The recipient receives the instrument by <strong>accepting it online</strong> with the claim slip (scan the QR code, or go to <code>/claim</code> and type the instrument number and code). Their acceptance is the delivery.</li>
+      <li><strong>Between people outside the network.</strong> Whoever has the claim slip can accept, so it is addressed to a named person, who must <strong>type their full name</strong> to confirm it is them. If the name does not match, they cannot accept. Once accepted, the slip is dead and the paper copy is only a keepsake.</li>
+      <li><strong>Locked while in the post.</strong> It works as an email offer does: locked until accepted, withdrawn or expired (28 days for post). It can be withdrawn only before it is accepted.</li>
+      <li><strong>Privacy.</strong> The postal address is kept only in the registry's private store, deleted when the offer ends. The history shows only the town and country.</li>
+      <li><strong>Cost.</strong> Postage is not charged through SovfHub yet. Agree and collect it separately for now.</li>
+    </ul>
+
     <h3>Setting up email so it is not blocked (once)</h3>
     <ol>
       <li>Create a free or paid transactional email account (this is built for Postmark) and add a sending <strong>subdomain</strong>, such as <code>notify.sovfren.org</code>.</li>

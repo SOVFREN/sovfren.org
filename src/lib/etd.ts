@@ -160,7 +160,7 @@ export interface State {
   delivered?: { to: Party; at: string; method: string };
   // An open offer to send it to someone outside by email. While open, nothing else can be done with the instrument.
   // It lapses by itself once its time has passed.
-  offer?: { tokenHash: string; expiresAt: string; to: Party; toMask: string; at: string };
+  offer?: { tokenHash: string; expiresAt: string; to: Party; toMask: string; at: string; channel: 'email' | 'post' };
   handedOver: boolean; // true once delivered, transferred or claimed: from then on it can no longer be cancelled
   past: Party[]; // those who held it before, and have passed it on
   pastKeys: string[];
@@ -301,6 +301,9 @@ const sameParty = (a: Party, b: Party) =>
 const isoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 
 export const BEARER_NAME = 'Bearer';
+
+// Steps the registry records when an instrument is printed and sent by recorded delivery.
+export const POST_STEPS = ['requested', 'printed', 'posted', 'delivered', 'returned'];
 
 export interface IssueInput {
   type: InstrumentType;
@@ -569,9 +572,11 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
       if (oneWay && !terms.bearer && s.past.some((p) => sameParty(p, to)) && !sameParty(terms.maker ?? terms.drawer ?? { name: '' }, to)) {
         return `event ${e.seq}: ${to.name} has held this instrument before; it cannot go back`;
       }
-      const msg = actMessage(docId, e.seq, e.prevHash, 'offer', [tokenHash, expiresAt, to.name, to.ref ?? '']);
+      // How it is being sent. Signed too (for post), so the registry cannot relabel an offer.
+      const channel: 'email' | 'post' = d.channel === 'post' ? 'post' : 'email';
+      const msg = actMessage(docId, e.seq, e.prevHash, 'offer', [tokenHash, expiresAt, to.name, to.ref ?? '', ...(channel === 'post' ? ['post'] : [])]);
       if (!holderSigOk(s.holderKey, msg, d.holderSig)) return `event ${e.seq}: offer is not signed by the current holder's key`;
-      s.offer = { tokenHash, expiresAt, to, toMask: String(d.toMask ?? '').slice(0, 80), at: e.at };
+      s.offer = { tokenHash, expiresAt, to, toMask: String(d.toMask ?? '').slice(0, 80), at: e.at, channel };
       return null;
     }
     case 'withdraw': {
@@ -597,7 +602,7 @@ function step(terms: Terms, s: State, e: EtdEvent, docId: string): string | null
       s.pastKeys.push(s.holderKey);
       s.holder = to;
       s.holderKey = toKey;
-      s.delivered = { to, at: e.at, method: 'email' };
+      s.delivered = { to, at: e.at, method: s.offer.channel === 'post' ? 'recorded delivery' : 'email' };
       s.acceptedAt = e.at;
       s.handedOver = true;
       s.offer = undefined;
@@ -748,10 +753,10 @@ type Action =
   | { type: 'cancel'; reason: string }
   | { type: 'rekey'; newKey: string; holderSig: string }
   | { type: 'recover'; newKey: string; reason: string }
-  | { type: 'offer'; to: Party; toMask: string; tokenHash: string; expiresAt: string; holderSig: string }
+  | { type: 'offer'; channel?: 'email' | 'post'; to: Party; toMask: string; tokenHash: string; expiresAt: string; holderSig: string }
   | { type: 'withdraw'; holderSig: string }
-  | { type: 'claim'; token: string; toKey: string; acceptSig: string }
-  | { type: 'notice'; status: string; toMask: string; note?: string };
+  | { type: 'claim'; token: string; toKey: string; acceptSig: string; confirmedName?: string }
+  | { type: 'notice'; channel?: 'email' | 'post'; status: string; toMask: string; note?: string; carrier?: string; tracking?: string };
 
 // Appends one event. `expectSeq` is the sequence number the caller saw; if
 // anything else has been recorded since, the action is refused (no double spend).
@@ -797,6 +802,7 @@ export async function act(id: string, expectSeq: number, action: Action, by: str
           tokenHash: action.tokenHash,
           expiresAt: action.expiresAt,
           holderSig: action.holderSig,
+          ...(action.channel === 'post' ? { channel: 'post' } : {}),
         };
         break;
       case 'withdraw':
@@ -804,11 +810,29 @@ export async function act(id: string, expectSeq: number, action: Action, by: str
         break;
       case 'claim':
         if (!v.state.offer) throw new Error('This offer is no longer open.');
-        data = { from: v.state.holder, to: v.state.offer.to, token: action.token, toKey: cleanKey(action.toKey, 'Your public key'), acceptSig: action.acceptSig };
+        data = { from: v.state.holder, to: v.state.offer.to, token: action.token, toKey: cleanKey(action.toKey, 'Your public key'), acceptSig: action.acceptSig, ...(action.confirmedName ? { confirmedName: action.confirmedName.slice(0, 120) } : {}) };
         break;
-      case 'notice':
-        data = { channel: 'email', status: action.status, toMask: action.toMask, ...(action.note ? { note: action.note.slice(0, 200) } : {}) };
+      case 'notice': {
+        const channel = action.channel === 'post' ? 'post' : 'email';
+        if (channel === 'post') {
+          // Postal steps are only recorded for an instrument that has been offered by post.
+          if (!inst.events.some((e) => e.type === 'offer' && (e.data as { channel?: string }).channel === 'post')) throw new Error('This instrument has not been offered by post.');
+          if (!POST_STEPS.includes(action.status)) throw new Error('Choose a postal step.');
+          const tracking = (action.tracking ?? '').replace(/\s+/g, '').toUpperCase();
+          if (action.status === 'posted' && !/^[A-Z0-9]{6,30}$/.test(tracking)) throw new Error('Enter the recorded delivery tracking number (6 to 30 letters and numbers).');
+          data = {
+            channel,
+            status: action.status,
+            toMask: action.toMask,
+            ...(action.carrier?.trim() ? { carrier: action.carrier.trim().slice(0, 60) } : {}),
+            ...(tracking ? { tracking } : {}),
+            ...(action.note?.trim() ? { note: action.note.trim().slice(0, 200) } : {}),
+          };
+        } else {
+          data = { channel, status: action.status, toMask: action.toMask, ...(action.note ? { note: action.note.slice(0, 200) } : {}) };
+        }
         break;
+      }
     }
     const event = await makeEvent(last.seq + 1, action.type, by, data, last.hash);
     const next: Instrument = { ...inst, events: [...inst.events, event] };

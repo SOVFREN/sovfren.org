@@ -42,7 +42,12 @@ if (Astro.request.method === 'POST') {
     const expectSeq = Number(f('seq'));
     if (!Number.isInteger(expectSeq)) throw new Error('Bad request.');
     if (f('act') === 'claim') {
-      inst = await act(id, expectSeq, { type: 'claim', token, toKey: f('toKey'), acceptSig: f('acceptSig') }, 'recipient');
+      // The person accepting types their name, so the register has it from their own hand and the right person is accepting.
+      const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+      if (!inst.terms.bearer && norm(f('confirmName')) !== norm(open.to.name)) {
+        throw new Error(`Please type your full name exactly as it appears in the box: ${open.to.name}. If that is not your name, this was not meant for you; please tell the sender.`);
+      }
+      inst = await act(id, expectSeq, { type: 'claim', token, toKey: f('toKey'), acceptSig: f('acceptSig'), confirmedName: inst.terms.bearer ? undefined : f('confirmName') }, 'recipient');
       await closeOffer(open.tokenHash);
       outcome = 'claimed';
     } else throw new Error('Unknown action.');
@@ -95,13 +100,18 @@ const qr = outcome === 'view' && open ? await QRCode.toDataURL(new URL(Astro.url
           <>
             <h2>Accept this instrument</h2>
             <form method="post" id="claim" class="f panel"
-              data-id={inst.id} data-seq={last.seq + 1} data-prev={last.hash} data-name={open.to.name} data-ref={open.to.ref ?? ''} data-token-hash={open.tokenHash}>
+              data-id={inst.id} data-seq={last.seq + 1} data-prev={last.hash} data-name={open.to.name} data-ref={open.to.ref ?? ''} data-token-hash={open.tokenHash} data-expected-name={inst.terms.bearer ? '' : open.to.name}>
               <input type="hidden" name="act" value="claim" />
               <input type="hidden" name="seq" value={last.seq} />
               <input type="hidden" name="token" value={token} />
               <input type="hidden" name="toKey" />
               <input type="hidden" name="acceptSig" />
               <p class="note" style="margin:0">Your <strong>key file</strong> is made in this browser and never sent to us. You will use it to prove you hold the instrument. A passphrase is strongly recommended.</p>
+              {!inst.terms.bearer && (
+                <label>This instrument is for <strong>{open.to.name}</strong>. Type your full name to confirm that is you
+                  <input name="confirmName" required maxlength="120" autocomplete="name" />
+                </label>
+              )}
               <label>Passphrase<input type="password" id="pass" autocomplete="new-password" /></label>
               <label>Repeat passphrase<input type="password" id="pass2" autocomplete="new-password" /></label>
               <label class="chk"><input type="checkbox" id="agree" required /> I have read this instrument. I accept it, and I take delivery of it as its holder.</label>
@@ -118,12 +128,15 @@ const qr = outcome === 'view' && open ? await QRCode.toDataURL(new URL(Astro.url
   import { actMessage, generateKeyFile, signWithKeyFile } from '../../lib/etd-client';
   const claim = document.getElementById('claim') as HTMLFormElement | null;
   if (claim) {
-    const d = claim.dataset as { id: string; seq: string; prev: string; name: string; ref: string; tokenHash: string };
+    const d = claim.dataset as { id: string; seq: string; prev: string; name: string; ref: string; tokenHash: string; expectedName: string };
     claim.addEventListener('submit', async (ev) => {
       if (claim.dataset.done) return;
       ev.preventDefault();
       const pass = (document.getElementById('pass') as HTMLInputElement).value;
       try {
+        const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+        const typed = (claim.elements.namedItem('confirmName') as HTMLInputElement | null)?.value ?? '';
+        if (d.expectedName && norm(typed) !== norm(d.expectedName)) throw new Error(`Please type your full name exactly as shown: ${d.expectedName}`);
         if (pass !== (document.getElementById('pass2') as HTMLInputElement).value) throw new Error('The passphrases do not match.');
         if (!pass && !confirm('Create the key without a passphrase? Anyone who gets the file can use it.')) return;
         const { publicKey, file } = await generateKeyFile(pass);

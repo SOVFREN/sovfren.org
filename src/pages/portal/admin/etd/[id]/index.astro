@@ -10,7 +10,7 @@ import { issuerLabel, issuerParty } from '../../../../../lib/etd-risk';
 import '../../../../../styles/etd.css';
 import { requireAdmin } from '../../../../../lib/admin';
 import { act, exchangeInstrument, getInstrument, linkProblem, replay, typeLabel, verifyInstrument, type Party } from '../../../../../lib/etd';
-import { closeOffer, sendOffer, type OfferResult } from '../../../../../lib/etd-send';
+import { closeOffer, postProgress, recordPostStep, sendByPost, sendOffer, type OfferResult } from '../../../../../lib/etd-send';
 import { getSession } from '../../../../../lib/session';
 import { findCurrency, getCurrencies } from '../../../../../lib/currencies';
 import { getFeeQuote, issueWithFee } from '../../../../../lib/etd-fees';
@@ -58,6 +58,26 @@ if (Astro.request.method === 'POST') {
       message = offerResult.emailed
         ? `Offer recorded, signed by the holder, and an email has been sent to ${offerResult.mask}. The instrument is locked until it is accepted, withdrawn or expires.`
         : `Offer recorded, signed by the holder. The email could not be sent (${offerResult.reason}). Pass the link below to the recipient yourself.`;
+    } else if (kind === 'offer_post') {
+      inst = await sendByPost(
+        id,
+        expectSeq,
+        {
+          addressee: f('addressee'),
+          toName: f('toName'),
+          toRef: f('toRef'),
+          address: { line1: f('line1'), line2: f('line2'), town: f('town'), postcode: f('postcode'), country: f('country') },
+          token: f('token'),
+          tokenHash: f('tokenHash'),
+          expiresAt: f('expiresAt'),
+          holderSig: f('holderSig'),
+        },
+        adminNumber,
+      );
+      message = 'Postal offer recorded, signed by the holder. The instrument is locked. Print the pack below, post it by recorded delivery, then record each step.';
+    } else if (kind === 'post_step') {
+      inst = await recordPostStep(id, f('step'), { carrier: f('carrier'), tracking: f('tracking'), note: f('note') }, adminNumber);
+      message = 'Postal step recorded in the instrument history.';
     } else if (kind === 'withdraw') {
       const open = replay(inst).state.offer;
       inst = await act(id, expectSeq, { type: 'withdraw', holderSig: f('holderSig') }, adminNumber);
@@ -127,6 +147,7 @@ const canDiscount = active && !due.onDemand && !!due.date && todayStr < due.date
 const canExchange = active && (due.onDemand || (!!due.date && due.date >= todayStr));
 const feeQuote = canExchange ? await getFeeQuote(session.accessToken) : null;
 const openOffer = v.state?.offer && Date.parse(v.state.offer.expiresAt) > Date.now() ? v.state.offer : null;
+const post = postProgress(inst); // set if this instrument has ever been offered by post
 const canCancel = !v.state?.handedOver; // one way only: once handed over, it can no longer be cancelled
 const link = await linkProblem(inst);
 const exchangeEvent = inst.events.find((e) => e.type === 'exchange')?.data as { newId: string; newSerial: string } | undefined;
@@ -193,11 +214,55 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
       </div>
     )}
 
+    {post && (
+      <>
+        <h2>Print and recorded delivery</h2>
+        <div class="panel">
+          <p style="margin-top:0">
+            To <strong>{post.toMask}</strong>. Latest step: <strong>{post.status}</strong>{post.tracking ? <>, {post.carrier || 'recorded delivery'} <span class="mono">{post.tracking}</span></> : null}.
+          </p>
+          {openOffer?.channel === 'post' && (
+            <p><a class="btn" href={`/portal/admin/etd/${inst.id}/post-pack`} target="_blank">Open the print pack</a></p>
+          )}
+          {post.steps.length > 0 && (
+            <ol class="timeline" style="margin:8px 0 14px">
+              {post.steps.map((s) => (
+                <li class="witness">
+                  <strong>{s.status.charAt(0).toUpperCase() + s.status.slice(1)}</strong>
+                  <div class="when">{s.at.replace('T', ' ').slice(0, 16)} UTC{s.tracking ? ` · ${s.carrier || 'Recorded delivery'} ${s.tracking}` : ''}{s.note ? ` · ${s.note}` : ''}</div>
+                </li>
+              ))}
+            </ol>
+          )}
+          {active && (
+            <form method="post" class="f">
+              <input type="hidden" name="act" value="post_step" /><input type="hidden" name="seq" value={last.seq} />
+              <div class="row">
+                <label>Record a step
+                  <select name="step" required>
+                    <option value="printed">Printed</option>
+                    <option value="posted">Posted (needs the tracking number)</option>
+                    <option value="delivered">Delivered (signed for)</option>
+                    <option value="returned">Returned / could not be delivered</option>
+                  </select>
+                </label>
+                <label>Carrier<input name="carrier" maxlength="60" placeholder="Royal Mail Signed For" /></label>
+                <label>Tracking number<input name="tracking" maxlength="40" placeholder="AB123456789GB" /></label>
+              </div>
+              <label>Note (optional, for example who signed)<input name="note" maxlength="200" /></label>
+              <button class="btn" type="submit">Record in the history</button>
+            </form>
+          )}
+          <p class="note" style="margin-bottom:0">Posting and delivery are recorded by the registry as witnessed notes. Delivery of the instrument itself happens when the recipient accepts it online using the claim slip.</p>
+        </div>
+      </>
+    )}
+
     {active && openOffer && (
       <>
         <h2>Offer open</h2>
         <div class="panel">
-          <p style="margin-top:0">This instrument has been offered to <strong>{openOffer.to.name}</strong> ({openOffer.toMask}). It is locked until they accept it, you withdraw the offer, or it expires on <strong>{openOffer.expiresAt.slice(0, 16).replace('T', ' ')} UTC</strong>. Once they accept, it is theirs and cannot be taken back.</p>
+          <p style="margin-top:0">This instrument has been offered to <strong>{openOffer.to.name}</strong> ({openOffer.toMask}){openOffer.channel === 'post' ? ' by post' : ' by email'}. It is locked until they accept it, you withdraw the offer, or it expires on <strong>{openOffer.expiresAt.slice(0, 16).replace('T', ' ')} UTC</strong>. Once they accept, it is theirs and cannot be taken back.</p>
           <form method="post" class="f signed" data-sign="withdraw" data-token-hash={openOffer.tokenHash}>
             <input type="hidden" name="act" value="withdraw" /><input type="hidden" name="seq" value={last.seq} />
             <fieldset><legend>Current holder signs to withdraw</legend>
@@ -239,6 +304,41 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
               </fieldset>
               <input type="hidden" name="holderSig" />
               <button class="btn" type="submit">Sign and send</button>
+            </form>
+          </details>
+
+          <details class="act">
+            <summary><span>Print and send by recorded delivery <span class="sub">a posted copy, accepted online with a claim slip</span></span></summary>
+            <form method="post" class="f signed" data-sign="offer_post" data-bearer={t.bearer ? '1' : '0'}>
+              <input type="hidden" name="act" value="offer_post" /><input type="hidden" name="seq" value={last.seq} />
+              <input type="hidden" name="token" /><input type="hidden" name="tokenHash" /><input type="hidden" name="expiresAt" />
+              <p class="note" style="margin:0">
+                We print a copy of the instrument with a letter and a <strong>claim slip</strong>, and post it by recorded delivery. Every step is recorded in the history, with the tracking number.
+                The recipient accepts it online with the slip, and that acceptance is the delivery. Until then it is locked and you can withdraw it. The slip works for 28 days.
+                <strong>Once they accept, it is theirs: it cannot be recalled or cancelled, and it cannot go back to anyone who held it before.</strong>
+              </p>
+              <label>Name the letter is addressed to<input name="addressee" required maxlength="120" /></label>
+              {t.bearer ? (
+                <input type="hidden" name="toName" value="Bearer" />
+              ) : (
+                <>
+                  <input type="hidden" name="toName" />
+                  <label>Companion No. / ref (optional)<input name="toRef" maxlength="60" /></label>
+                </>
+              )}
+              <label>Address line 1<input name="line1" required maxlength="100" /></label>
+              <label>Address line 2 (optional)<input name="line2" maxlength="100" /></label>
+              <div class="row">
+                <label>Town / city<input name="town" required maxlength="60" /></label>
+                <label>Postcode<input name="postcode" maxlength="20" /></label>
+                <label>Country<input name="country" required maxlength="60" /></label>
+              </div>
+              <fieldset><legend>Current holder signs the offer</legend>
+                <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+              </fieldset>
+              <input type="hidden" name="holderSig" />
+              <button class="btn" type="submit">Sign and request posting</button>
             </form>
           </details>
 
@@ -389,7 +489,13 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
           {['recover', 'notice'].includes(e.type) && <span class="tag witness">registry-witnessed</span>}
           {e.type === 'offer' && <div>To {(e.data as any).to?.name} ({(e.data as any).toMask}), open until {String((e.data as any).expiresAt).slice(0, 16).replace('T', ' ')} UTC</div>}
           {e.type === 'claim' && <div>{pName((e.data as any).from)} → {pName((e.data as any).to)}, delivered by email</div>}
-          {e.type === 'notice' && <div>Email to {(e.data as any).toMask}: {(e.data as any).status}{(e.data as any).note ? `. ${(e.data as any).note}` : ''}</div>}
+          {e.type === 'notice' && (
+            <div>
+              {(e.data as any).channel === 'post' ? 'Post' : 'Email'} to {(e.data as any).toMask}: {(e.data as any).status}
+              {(e.data as any).tracking ? ` · ${(e.data as any).carrier || 'recorded delivery'} ${(e.data as any).tracking}` : ''}
+              {(e.data as any).note ? `. ${(e.data as any).note}` : ''}
+            </div>
+          )}
           <div class="when">{e.at.replace('T', ' ').slice(0, 19)} UTC · recorded by {e.by}</div>
           {e.type === 'transfer' && <div>{t.bearer ? 'Passed to a new bearer' : `${pName((e.data as any).from)} → ${pName((e.data as any).to)}`}</div>}
           {e.type === 'deliver' && <div>{(e.data as any).method}</div>}
@@ -480,6 +586,16 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
         setField('tokenHash', tokenHash);
         setField('expiresAt', expiresAt);
         args = [tokenHash, expiresAt, val('toName'), val('toRef')];
+      } else if (type === 'offer_post') {
+        // Same offer, sent by post: the code goes on the printed claim slip. The 'post' channel is part of what is signed.
+        const token = randomToken();
+        const tokenHash = await sha256Hex(token);
+        const expiresAt = new Date(Date.now() + 28 * 864e5).toISOString();
+        if (form.dataset.bearer !== '1') setField('toName', val('addressee'));
+        setField('token', token);
+        setField('tokenHash', tokenHash);
+        setField('expiresAt', expiresAt);
+        args = [tokenHash, expiresAt, val('toName'), val('toRef'), 'post'];
       } else if (type === 'withdraw') {
         args = [form.dataset.tokenHash ?? ''];
       } else {
@@ -499,7 +615,7 @@ const pName = (p?: Party) => (p ? p.name + (p.ref ? ` (${p.ref})` : '') + (p.lei
       try {
         const file = form.querySelector<HTMLInputElement>('.keyfile')!.files![0];
         const pass = form.querySelector<HTMLInputElement>('.pass')!.value;
-        const { sig } = await signWithKeyFile(await file.text(), pass, actMessage(ctx.docId, ctx.docSeq, ctx.docPrev, type, args));
+        const { sig } = await signWithKeyFile(await file.text(), pass, actMessage(ctx.docId, ctx.docSeq, ctx.docPrev, type === 'offer_post' ? 'offer' : type, args));
         (form.elements.namedItem('holderSig') as HTMLInputElement).value = sig;
         form.dataset.done = '1';
         form.submit();
