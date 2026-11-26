@@ -69,6 +69,11 @@ if (Astro.request.method === 'POST') {
         interestRate: f('interestRate'),
         dayCount: f('dayCount'),
         bearer: f('type') === 'promissory_note' && f('payTo') === 'bearer',
+        placeOfPayment: f('placeOfPayment'),
+        international: f('form') === 'international',
+        issueCountry: f('issueCountry'),
+        paymentCountry: f('paymentCountry'),
+        authorised: f('authorised') === 'yes',
         payee: party('payee'),
         payeeKey: f('payeeKey'),
         maker: party('maker'),
@@ -237,7 +242,22 @@ const money = (v: string) => {
           <p class="calc-preview" id="maturity-preview" aria-live="polite" hidden></p>
           <p class="note" style="margin:0">Simple interest on whole days from the issue date, rounded to the nearest penny. The time of day does not affect interest.</p>
         </fieldset>
-        <label>Place of issue<input name="placeOfIssue" required maxlength="120" value={val('placeOfIssue')} /></label>
+        <div class="row">
+          <label>Place of issue<input name="placeOfIssue" required maxlength="120" value={val('placeOfIssue')} /></label>
+          <label>Place of payment<input name="placeOfPayment" maxlength="120" value={val('placeOfPayment')} placeholder="Where it will be paid" /></label>
+        </div>
+        <fieldset>
+          <legend>Which form of words?</legend>
+          <div class="row">
+            <label class="chk"><input type="radio" name="form" value="domestic" checked={val('form', 'domestic') === 'domestic'} /> Domestic (standard wording)</label>
+            <label class="chk"><input type="radio" name="form" value="international" checked={val('form') === 'international'} /> International (UNCITRAL Convention wording)</label>
+          </div>
+          <div class="row" id="intl-fields" hidden>
+            <label>Country of issue<input name="issueCountry" maxlength="60" value={val('issueCountry')} placeholder="United Kingdom" /></label>
+            <label>Country of payment<input name="paymentCountry" maxlength="60" value={val('paymentCountry')} placeholder="South Africa" /></label>
+          </div>
+          <p class="note" style="margin:0" id="intl-note" hidden>The international form prints the Convention's required words in the text. It needs a place of payment, and the place of issue and the place of payment must be in different countries.</p>
+        </fieldset>
       </div>
 
       <div class="step">
@@ -293,6 +313,11 @@ const money = (v: string) => {
       </details>
 
       <div class="step" style="margin-top:22px;margin-bottom:0">
+        <p class="note" style="margin-top:0">To be valid, the promise or order must be <strong>unconditional</strong>, for a <strong>fixed sum</strong>, payable on demand or at a fixed or determinable time. Do not add clauses that make payment depend on something happening.</p>
+        <label class="chk">
+          <input type="checkbox" name="authorised" value="yes" required checked={val('authorised') === 'yes'} />
+          <span id="auth-label">I am the maker, or I am authorised by the maker, to sign this note by electronic signature.</span>
+        </label>
         {quote?.charging && (
           <label class="chk">
             <input type="checkbox" name="feeOk" value="yes" required />
@@ -385,6 +410,16 @@ const money = (v: string) => {
     form.querySelectorAll<HTMLInputElement>('.only-bill input[name$="Name"]').forEach((i) => (i.required = bill));
     form.querySelectorAll<HTMLInputElement>('.only-note input[name$="Name"]').forEach((i) => (i.required = !bill));
 
+    document.getElementById('auth-label')!.textContent = bill
+      ? 'I am the drawer, or I am authorised by the drawer, to sign this bill by electronic signature.'
+      : 'I am the maker, or I am authorised by the maker, to sign this note by electronic signature.';
+    const intl = form.querySelector<HTMLInputElement>('input[name="form"]:checked')?.value === 'international';
+    document.getElementById('intl-fields')!.hidden = !intl;
+    document.getElementById('intl-note')!.hidden = !intl;
+    field('placeOfPayment').required = intl;
+    field('issueCountry').required = intl;
+    field('paymentCountry').required = intl;
+
     // Pay to the bearer: promissory notes only. No named payee; the key is the bearer's.
     const bearer = !bill && form.querySelector<HTMLInputElement>('input[name="payTo"]:checked')?.value === 'bearer';
     document.getElementById('named-fields')!.hidden = bearer;
@@ -406,7 +441,7 @@ const money = (v: string) => {
     }
     showMaturity();
   };
-  form.querySelectorAll<HTMLInputElement>('input[name="type"], input[name="payableMode"], input[name="payTo"]').forEach((r) => r.addEventListener('change', sync));
+  form.querySelectorAll<HTMLInputElement>('input[name="type"], input[name="payableMode"], input[name="payTo"], input[name="form"]').forEach((r) => r.addEventListener('change', sync));
   form.addEventListener('input', (e) => {
     const n = (e.target as HTMLInputElement).name;
     if (n === 'currency') sync();

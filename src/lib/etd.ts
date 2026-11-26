@@ -83,6 +83,14 @@ export interface Terms {
   currencySymbolAfter?: boolean; // symbol goes after the figure, e.g. 1,000.00 ₹
   issuedAt: string; // ISO date
   placeOfIssue: string;
+  placeOfPayment?: string; // where payment is to be made (required by the Geneva and UNCITRAL forms)
+  // "international" = the UNCITRAL Convention form of words (the legend must appear in the text, and the
+  // place of issue and place of payment must be in different countries). Absent = domestic.
+  form?: 'international';
+  issueCountry?: string;
+  paymentCountry?: string;
+  // The person issuing confirmed they are the maker/drawer, or authorised by them, to sign by electronic signature.
+  authorised?: boolean;
   payableOn: string; // "on demand", an ISO date, or an ISO date and time "YYYY-MM-DDTHH:MM"
   payableTz?: string; // IANA time zone the time (if any) is in, e.g. "Europe/London"
   payee: Party; // payable to the order of (for a bearer note, the fixed party "Bearer")
@@ -273,6 +281,11 @@ export const BEARER_NAME = 'Bearer';
 export interface IssueInput {
   type: InstrumentType;
   bearer?: boolean; // promissory notes only: pay to the bearer instead of a named payee
+  placeOfPayment?: string;
+  international?: boolean; // UNCITRAL form of words; needs both countries below, which must differ
+  issueCountry?: string;
+  paymentCountry?: string;
+  authorised: boolean; // issuer confirms they are the maker/drawer or authorised to sign for them
   amount: string;
   currency: string;
   currencySymbol?: string;
@@ -414,6 +427,24 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     : input.interest?.trim();
   const place = input.placeOfIssue.trim();
   if (!place || place.length > 120) throw new Error('Enter the place of issue.');
+  const placeOfPayment = (input.placeOfPayment ?? '').trim();
+  if (placeOfPayment.length > 120) throw new Error('The place of payment is too long.');
+  if (input.authorised !== true) {
+    throw new Error(`Confirm that you are the ${type === 'promissory_note' ? 'maker' : 'drawer'}, or are authorised by them, to sign this instrument.`);
+  }
+  // The UNCITRAL form: the legend is printed in the text, and the places must be in different countries.
+  const international = input.international === true;
+  const issueCountry = (input.issueCountry ?? '').trim();
+  const paymentCountry = (input.paymentCountry ?? '').trim();
+  if (international) {
+    if (!placeOfPayment) throw new Error('An international instrument must state the place of payment.');
+    if (!issueCountry || !paymentCountry || issueCountry.length > 60 || paymentCountry.length > 60) {
+      throw new Error('An international instrument must state the country of issue and the country of payment.');
+    }
+    if (issueCountry.toLowerCase() === paymentCountry.toLowerCase()) {
+      throw new Error('An international instrument needs the place of issue and the place of payment to be in different countries. Use the domestic form instead.');
+    }
+  }
 
   const year = new Date().getUTCFullYear();
   const terms: Terms = {
@@ -426,6 +457,9 @@ export async function issue(input: IssueInput, by: string): Promise<Instrument> 
     amountWords: amountInWords(amount, currency) ?? undefined,
     issuedAt: input.issuedAt,
     placeOfIssue: place,
+    ...(placeOfPayment ? { placeOfPayment } : {}),
+    ...(international ? { form: 'international' as const, issueCountry, paymentCountry } : {}),
+    authorised: true,
     payableOn,
     ...(payableTz ? { payableTz } : {}),
     payee: bearer ? { name: BEARER_NAME } : cleanParty(input.payee, 'Payee'),
@@ -698,6 +732,10 @@ export async function exportStandard(inst: Instrument, baseUrl: string) {
         return w.onDemand ? { onDemand: true } : { date: w.date, time: w.time, timeZone: t.payableTz };
       })(),
       placeOfIssue: t.placeOfIssue,
+      placeOfPayment: t.placeOfPayment,
+      form: t.form === 'international' ? 'INTERNATIONAL_UNCITRAL' : 'DOMESTIC',
+      issueCountry: t.issueCountry,
+      paymentCountry: t.paymentCountry,
       governingLaw: t.governingLaw,
       interest: t.interest,
       interestTerms: t.interestRate
@@ -801,6 +839,11 @@ export async function exchangeInstrument(
         currencySymbolAfter: input.newSymbolAfter,
         issuedAt: today,
         placeOfIssue: t.placeOfIssue,
+        placeOfPayment: t.placeOfPayment,
+        international: t.form === 'international',
+        issueCountry: t.issueCountry,
+        paymentCountry: t.paymentCountry,
+        authorised: true, // the holder and the issuer have both agreed to this exchange
         payableOn: t.payableOn,
         payableTz: t.payableTz,
         interestRate: t.interestRate,
