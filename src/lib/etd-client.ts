@@ -87,3 +87,49 @@ export async function sha256Hex(s: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+// Must match accessMessage() in etd.ts. What a holder signs to open their instrument's page without an account.
+export const accessMessage = (serial: string, ts: string) => ['etd-access-v1', serial, ts].join('\n');
+
+// Wires up the signed forms on the holder's own page (transfer, send by email, send by post, withdraw).
+// Each form: `data-sign` says which act; the holder's key file and passphrase sign it in the browser.
+export function wireHolderForms(ctx: { docId: string; docSeq: string; docPrev: string }) {
+  document.querySelectorAll<HTMLFormElement>('form.signed').forEach((form) => {
+    form.addEventListener('submit', async (ev) => {
+      if (form.dataset.done) return;
+      ev.preventDefault();
+      const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement | null)?.value.trim() ?? '';
+      const setField = (n: string, v: string) => ((form.elements.namedItem(n) as HTMLInputElement).value = v);
+      const type = form.dataset.sign!;
+      try {
+        let args: string[] = [];
+        let msgType = type;
+        if (type === 'transfer') {
+          args = [val('toName'), val('toRef'), val('toKey')];
+        } else if (type === 'offer' || type === 'offer_post') {
+          // A fresh one-time code, made here. The holder signs its fingerprint; the code itself goes only to the recipient.
+          const token = randomToken();
+          const tokenHash = await sha256Hex(token);
+          const post = type === 'offer_post';
+          const expiresAt = new Date(Date.now() + (post ? 28 : 14) * 864e5).toISOString();
+          if (post && form.dataset.bearer !== '1') setField('toName', val('addressee'));
+          setField('token', token);
+          setField('tokenHash', tokenHash);
+          setField('expiresAt', expiresAt);
+          args = [tokenHash, expiresAt, val('toName'), val('toRef'), ...(post ? ['post'] : [])];
+          msgType = 'offer';
+        } else if (type === 'withdraw') {
+          args = [form.dataset.tokenHash ?? ''];
+        }
+        const file = form.querySelector<HTMLInputElement>('.keyfile')!.files![0];
+        const pass = form.querySelector<HTMLInputElement>('.pass')!.value;
+        const { sig } = await signWithKeyFile(await file.text(), pass, actMessage(ctx.docId, ctx.docSeq, ctx.docPrev, msgType, args));
+        setField('holderSig', sig);
+        form.dataset.done = '1';
+        form.submit();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Could not sign.');
+      }
+    });
+  });
+}

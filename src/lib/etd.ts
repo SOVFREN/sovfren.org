@@ -294,6 +294,12 @@ function holderSigOk(key: string, message: string, sig: unknown): boolean {
   }
 }
 
+/** Does this signature come from the key that currently holds the instrument? Used to let a holder in without an account. */
+export const verifyHolderSignature = (key: string, message: string, sig: unknown): boolean => holderSigOk(key, message, sig);
+
+/** What a holder signs to open their instrument's page. The browser builds the same string (see etd-client.ts). */
+export const accessMessage = (serial: string, ts: string) => ['etd-access-v1', serial, ts].join('\n');
+
 const sameParty = (a: Party, b: Party) =>
   a.name.trim().toLowerCase() === b.name.trim().toLowerCase() &&
   (a.ref ?? '').toLowerCase() === (b.ref ?? '').toLowerCase();

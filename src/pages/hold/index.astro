@@ -1,0 +1,310 @@
+---
+export const prerender = false;
+
+import QRCode from 'qrcode';
+import Layout from '../../layouts/Layout.astro';
+import InstrumentDocument from '../../components/InstrumentDocument.astro';
+import '../../styles/etd.css';
+import { accessMessage, act, getInstrument, replay, verifyHolderSignature, verifyInstrument, type Instrument, type Party } from '../../lib/etd';
+import { closeOffer, findBySerial, postProgress, sendByPost, sendOffer, tooManyTries, type OfferResult } from '../../lib/etd-send';
+
+// Public page for the holder of an instrument, with no account. The holder proves they hold it by signing a short
+// challenge with their key file, in the browser (the key never leaves it). Only the current holder's key opens it.
+// From here they can pass it on: directly to another holder's key, by email, or by post, or withdraw an offer.
+// Every act is signed by the holder's key and recorded in the instrument's history, exactly as in the portal.
+let ip = Astro.request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';
+if (!ip) {
+  try {
+    ip = Astro.clientAddress;
+  } catch {
+    ip = 'unknown';
+  }
+}
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+const baseUrl = new URL(Astro.site ?? Astro.url.origin).origin;
+
+let error: string | null = null;
+let message: string | null = null;
+let offerResult: OfferResult | null = null;
+let inst: Instrument | null = null;
+let authed = false;
+let handedOn = false; // the holder just passed it to someone else: show the result only
+let proof = { serial: '', ts: '', accessSig: '' };
+
+if (Astro.request.method === 'POST') {
+  if (Astro.request.headers.get('origin') !== Astro.url.origin) return new Response('Forbidden', { status: 403 });
+  if (tooManyTries(ip, 40)) return new Response('Too many attempts. Please try again in a few minutes.', { status: 429, headers: { 'Cache-Control': 'no-store' } });
+  const form = await Astro.request.formData();
+  const f = (k: string) => String(form.get(k) ?? '');
+  proof = { serial: f('serial').trim().toUpperCase(), ts: f('ts'), accessSig: f('accessSig') };
+
+  inst = await findBySerial(proof.serial);
+  const state = inst ? replay(inst).state : null;
+  const fresh = /^\d{13}$/.test(proof.ts) && Math.abs(Date.now() - Number(proof.ts)) < 30 * 60_000;
+  authed = !!(inst && state && fresh && verifyHolderSignature(state.holderKey, accessMessage(inst.terms.serial, proof.ts), proof.accessSig));
+  if (!authed) {
+    inst = null;
+    // The same answer whether the number exists or not, so this cannot be used to look for instruments.
+    error = 'We could not open that. Check the instrument number, and that you chose the key file of the current holder. If your session timed out, try again.';
+  } else if (f('act') && inst) {
+    const id = inst.id;
+    const startKey = state!.holderKey;
+    const expectSeq = Number(f('seq'));
+    try {
+      if (!Number.isInteger(expectSeq)) throw new Error('Bad request.');
+      const kind = f('act');
+      const sendLimited = () => {
+        if (tooManyTries(`${ip}:send`, 6, 60 * 60_000)) throw new Error('Too many offers from this connection. Please try again later.');
+      };
+      if (kind === 'transfer') {
+        const to: Party = { name: f('toName'), ...(f('toRef').trim() ? { ref: f('toRef').trim() } : {}) };
+        inst = await act(id, expectSeq, { type: 'transfer', to, toKey: f('toKey'), holderSig: f('holderSig') }, 'holder');
+        message = 'Transferred. The instrument now belongs to the new holder, and your key can no longer act on it.';
+      } else if (kind === 'offer') {
+        sendLimited();
+        offerResult = await sendOffer(
+          id,
+          expectSeq,
+          { email: f('email'), toName: f('toName'), toRef: f('toRef'), token: f('token'), tokenHash: f('tokenHash'), expiresAt: f('expiresAt'), holderSig: f('holderSig') },
+          `holder:${proof.serial}`,
+          baseUrl,
+        );
+        inst = offerResult.inst;
+        message = offerResult.emailed
+          ? `Offer signed, and an email has been sent to ${offerResult.mask}. The instrument is locked until it is accepted, withdrawn or expires.`
+          : `Offer signed. The email could not be sent (${offerResult.reason}). Pass the link below to the recipient yourself.`;
+      } else if (kind === 'offer_post') {
+        sendLimited();
+        inst = await sendByPost(
+          id,
+          expectSeq,
+          {
+            addressee: f('addressee'),
+            toName: f('toName'),
+            toRef: f('toRef'),
+            address: { line1: f('line1'), line2: f('line2'), town: f('town'), postcode: f('postcode'), country: f('country') },
+            token: f('token'),
+            tokenHash: f('tokenHash'),
+            expiresAt: f('expiresAt'),
+            holderSig: f('holderSig'),
+          },
+          `holder:${proof.serial}`,
+        );
+        message = 'Posting requested and signed. The instrument is locked. The Sovfren Society will print it and send it by recorded delivery, and each step is recorded below.';
+      } else if (kind === 'withdraw') {
+        const open = state!.offer;
+        inst = await act(id, expectSeq, { type: 'withdraw', holderSig: f('holderSig') }, 'holder');
+        if (open) await closeOffer(open.tokenHash);
+        message = 'Offer withdrawn. The link or slip no longer works, and the instrument is unlocked.';
+      } else throw new Error('Unknown action.');
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Could not record that.';
+      inst = await getInstrument(id);
+    }
+    if (inst && replay(inst).state.holderKey !== startKey) handedOn = true;
+  }
+}
+
+const v = authed && inst && !handedOn ? await verifyInstrument(inst) : null;
+const st = v?.state;
+const t = inst?.terms;
+const last = inst?.events[inst.events.length - 1];
+const openOffer = st?.offer && Date.parse(st.offer.expiresAt) > Date.now() ? st.offer : null;
+const post = inst ? postProgress(inst) : null;
+const qr = v ? await QRCode.toDataURL(baseUrl, { margin: 2, width: 160 }) : '';
+const hidden = proof; // sent again with each act, so the page can reopen after it
+---
+<Layout title="Manage an instrument you hold" noindex>
+  <section class="wrap etd">
+    <header class="page-head">
+      <span class="eyebrow">Sovfren Society · Electronic Trade Register</span>
+      <h1>Manage an instrument you hold</h1>
+      {!authed && <p class="lead">Open an instrument with your key file to pass it on. No account is needed. Your key file is used in this browser only and is never sent to us.</p>}
+    </header>
+
+    {error && <p role="alert" class="msg bad">{error}</p>}
+    {message && <p role="status" class="msg ok">{message}</p>}
+
+    {offerResult && (
+      <div class="panel" style="margin:16px 0">
+        <p class="step-title" style="margin-top:0">One-time link for {offerResult.mask}</p>
+        <p class="note" style="margin:0 0 8px">{offerResult.emailed ? 'This was emailed to them. You can also pass it on yourself, for example by message.' : 'Pass this to the recipient yourself.'} It works once and is shown only now, so copy it before you leave this page.</p>
+        <textarea rows="3" readonly class="mono" onfocus="this.select()" style="width:100%">{offerResult.link}</textarea>
+      </div>
+    )}
+
+    {!authed && (
+      <form method="post" id="access" class="f panel">
+        <input type="hidden" name="ts" /><input type="hidden" name="accessSig" />
+        <label>Instrument number<input name="serial" required placeholder="ETD-2026-000001" autocomplete="off" style="text-transform:uppercase" /></label>
+        <fieldset><legend>Your key file</legend>
+          <label>Key file<input type="file" id="keyfile" accept=".json,application/json" required /></label>
+          <label>Passphrase<input type="password" id="pass" autocomplete="off" /></label>
+        </fieldset>
+        <button class="btn" type="submit">Open my instrument</button>
+        <p class="note" style="margin:0">Opening is proved by signing a short message with your key file. Only the key of the current holder opens it.</p>
+      </form>
+    )}
+
+    {authed && handedOn && (
+      <div class="panel"><p style="margin:0">You no longer hold this instrument, so there is nothing more to do here.</p></div>
+    )}
+
+    {v && inst && t && st && last && (
+      <div id="holder" data-id={inst.id} data-seq={last.seq + 1} data-prev={last.hash}>
+        {!v.ok && <div class="msg bad" role="alert"><strong>This instrument failed verification. Do not rely on it.</strong></div>}
+        <InstrumentDocument inst={inst} state={st} verified={v.ok} qr={qr} />
+
+        {post && (
+          <>
+            <h2>Print and recorded delivery</h2>
+            <div class="panel">
+              <p style="margin-top:0">To <strong>{post.toMask}</strong>. Latest step: <strong>{post.status}</strong>{post.tracking ? <>, {post.carrier || 'recorded delivery'} <span class="mono">{post.tracking}</span></> : null}.</p>
+              <ol class="timeline" style="margin:8px 0 0">
+                {post.steps.map((s) => (
+                  <li class="witness">
+                    <strong>{s.status.charAt(0).toUpperCase() + s.status.slice(1)}</strong>
+                    <div class="when">{s.at.replace('T', ' ').slice(0, 16)} UTC{s.tracking ? ` · ${s.carrier || 'Recorded delivery'} ${s.tracking}` : ''}{s.note ? ` · ${s.note}` : ''}</div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </>
+        )}
+
+        {v.ok && st.status !== 'active' && <div class="panel" style="margin-top:16px"><p style="margin:0">This instrument is {st.status}, so it can no longer be passed on.</p></div>}
+
+        {v.ok && st.status === 'active' && openOffer && (
+          <>
+            <h2>Offer open</h2>
+            <div class="panel">
+              <p style="margin-top:0">This instrument has been offered to <strong>{openOffer.to.name}</strong> ({openOffer.toMask}){openOffer.channel === 'post' ? ' by post' : ' by email'}. It is locked until they accept it, you withdraw the offer, or it expires on <strong>{openOffer.expiresAt.slice(0, 16).replace('T', ' ')} UTC</strong>. Once they accept, it is theirs and cannot be taken back.</p>
+              <form method="post" class="f signed" data-sign="withdraw" data-token-hash={openOffer.tokenHash}>
+                <input type="hidden" name="act" value="withdraw" /><input type="hidden" name="seq" value={last.seq} />
+                <input type="hidden" name="serial" value={hidden.serial} /><input type="hidden" name="ts" value={hidden.ts} /><input type="hidden" name="accessSig" value={hidden.accessSig} />
+                <fieldset><legend>Sign with your key file to withdraw</legend>
+                  <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                  <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+                </fieldset>
+                <input type="hidden" name="holderSig" />
+                <button class="btn btn-outline-dark" type="submit">Withdraw the offer</button>
+              </form>
+            </div>
+          </>
+        )}
+
+        {v.ok && st.status === 'active' && !openOffer && (
+          <>
+            <h2>Pass it on</h2>
+            <p class="note">Once the new holder has it, it cannot be taken back, cancelled, or returned to anyone who held it before.</p>
+            <div class="acts">
+              <details class="act">
+                <summary><span>Send by email <span class="sub">they accept it with a secure link</span></span></summary>
+                <form method="post" class="f signed" data-sign="offer">
+                  <input type="hidden" name="act" value="offer" /><input type="hidden" name="seq" value={last.seq} />
+                  <input type="hidden" name="serial" value={hidden.serial} /><input type="hidden" name="ts" value={hidden.ts} /><input type="hidden" name="accessSig" value={hidden.accessSig} />
+                  <input type="hidden" name="token" /><input type="hidden" name="tokenHash" /><input type="hidden" name="expiresAt" />
+                  <p class="note" style="margin:0">They get an email with a one-time link, read the instrument, create their own key and accept. Acceptance is the delivery. Until then it is locked and you can withdraw it. The link works for 14 days.</p>
+                  <label>Recipient's email<input type="email" name="email" required maxlength="254" autocomplete="off" /></label>
+                  {t.bearer ? (
+                    <input type="hidden" name="toName" value="Bearer" />
+                  ) : (
+                    <div class="row">
+                      <label>Recipient's full name<input name="toName" required maxlength="120" /></label>
+                      <label>Companion No. / ref (optional)<input name="toRef" maxlength="60" /></label>
+                    </div>
+                  )}
+                  <fieldset><legend>Sign with your key file</legend>
+                    <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                    <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+                  </fieldset>
+                  <input type="hidden" name="holderSig" />
+                  <button class="btn" type="submit">Sign and send</button>
+                </form>
+              </details>
+
+              <details class="act">
+                <summary><span>Send by post <span class="sub">printed and posted by recorded delivery</span></span></summary>
+                <form method="post" class="f signed" data-sign="offer_post" data-bearer={t.bearer ? '1' : '0'}>
+                  <input type="hidden" name="act" value="offer_post" /><input type="hidden" name="seq" value={last.seq} />
+                  <input type="hidden" name="serial" value={hidden.serial} /><input type="hidden" name="ts" value={hidden.ts} /><input type="hidden" name="accessSig" value={hidden.accessSig} />
+                  <input type="hidden" name="token" /><input type="hidden" name="tokenHash" /><input type="hidden" name="expiresAt" />
+                  <p class="note" style="margin:0">We print a copy with a letter and a claim slip and post it by recorded delivery, recording each step with its tracking number below. They accept it online with the slip. The slip works for 28 days.</p>
+                  <label>Name the letter is addressed to<input name="addressee" required maxlength="120" /></label>
+                  {t.bearer ? <input type="hidden" name="toName" value="Bearer" /> : <input type="hidden" name="toName" />}
+                  <label>Address line 1<input name="line1" required maxlength="100" /></label>
+                  <label>Address line 2 (optional)<input name="line2" maxlength="100" /></label>
+                  <div class="row">
+                    <label>Town / city<input name="town" required maxlength="60" /></label>
+                    <label>Postcode<input name="postcode" maxlength="20" /></label>
+                    <label>Country<input name="country" required maxlength="60" /></label>
+                  </div>
+                  <fieldset><legend>Sign with your key file</legend>
+                    <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                    <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+                  </fieldset>
+                  <input type="hidden" name="holderSig" />
+                  <button class="btn" type="submit">Sign and request posting</button>
+                </form>
+              </details>
+
+              <details class="act">
+                <summary><span>Transfer to another holder's key <span class="sub">if they already have a key</span></span></summary>
+                <form method="post" class="f signed" data-sign="transfer">
+                  <input type="hidden" name="act" value="transfer" /><input type="hidden" name="seq" value={last.seq} />
+                  <input type="hidden" name="serial" value={hidden.serial} /><input type="hidden" name="ts" value={hidden.ts} /><input type="hidden" name="accessSig" value={hidden.accessSig} />
+                  {t.bearer ? (
+                    <input type="hidden" name="toName" value="Bearer" />
+                  ) : (
+                    <div class="row">
+                      <label>New holder's full name<input name="toName" required maxlength="120" /></label>
+                      <label>Companion No. / ref (optional)<input name="toRef" maxlength="60" /></label>
+                    </div>
+                  )}
+                  <label>{t.bearer ? "New bearer's public key" : "New holder's public key"}<textarea name="toKey" rows="2" required class="mono"></textarea></label>
+                  <fieldset><legend>Sign with your key file</legend>
+                    <label>Key file<input type="file" class="keyfile" accept=".json,application/json" required /></label>
+                    <label>Passphrase<input type="password" class="pass" autocomplete="off" /></label>
+                  </fieldset>
+                  <input type="hidden" name="holderSig" />
+                  <button class="btn" type="submit">Sign and transfer</button>
+                </form>
+              </details>
+            </div>
+          </>
+        )}
+      </div>
+    )}
+  </section>
+</Layout>
+
+<script>
+  import { accessMessage, signWithKeyFile, wireHolderForms } from '../../lib/etd-client';
+
+  // Opening the page: sign a short challenge with the key file. The key never leaves this browser.
+  const access = document.getElementById('access') as HTMLFormElement | null;
+  if (access) {
+    access.addEventListener('submit', async (ev) => {
+      if (access.dataset.done) return;
+      ev.preventDefault();
+      try {
+        const serialInput = access.elements.namedItem('serial') as HTMLInputElement;
+        serialInput.value = serialInput.value.trim().toUpperCase();
+        const file = (document.getElementById('keyfile') as HTMLInputElement).files![0];
+        const pass = (document.getElementById('pass') as HTMLInputElement).value;
+        const ts = String(Date.now());
+        const { sig } = await signWithKeyFile(await file.text(), pass, accessMessage(serialInput.value, ts));
+        (access.elements.namedItem('ts') as HTMLInputElement).value = ts;
+        (access.elements.namedItem('accessSig') as HTMLInputElement).value = sig;
+        access.dataset.done = '1';
+        access.submit();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Could not open with that key file.');
+      }
+    });
+  }
+
+  const holder = document.getElementById('holder');
+  if (holder) wireHolderForms({ docId: holder.dataset.id!, docSeq: holder.dataset.seq!, docPrev: holder.dataset.prev! });
+</script>
